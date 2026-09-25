@@ -10,6 +10,7 @@ from lsdtrader.core.bar import TickBar
 from lsdtrader.core.config import StrategyConfig
 from lsdtrader.core.events import Event, EventLog
 from lsdtrader.strategy.atr import Atr
+from lsdtrader.strategy.context import LevelBook, TrendTracker, hh_hl
 from lsdtrader.strategy.liquidity import LiquidityBook, match_zones
 from lsdtrader.strategy.setups import Entry, SetupTracker
 from lsdtrader.strategy.structure import StructureTracker
@@ -17,6 +18,9 @@ from lsdtrader.strategy.swings import confirmed_swing_low
 from lsdtrader.strategy.zones import ZoneBook
 
 Side = Literal["long", "short"]
+TREND_PIVOTS = (1, 2, 5, 10, 20)  # swing size of the structure-trend candidates
+HHHL_HALVES = (48, 144)  # 4 h and 12 h halves (5-minute bars)
+LEVEL_PIVOTS = (5, 10, 20)  # swing size of the key-level candidates
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +70,9 @@ class SideEngine:
         self.zones = ZoneBook(cfg, self.log)
         self.liquidity = LiquidityBook()
         self.setups = SetupTracker(cfg, self.log, self.zones)
+        # RD-TREE v3 context candidates (research features, filter nothing)
+        self.trends = {n: TrendTracker(n) for n in TREND_PIVOTS}
+        self.levels = {n: LevelBook(n) for n in LEVEL_PIVOTS}
 
     def on_bar(self, bar: TickBar) -> list[Entry]:
         self.bars.append(bar)
@@ -84,11 +91,28 @@ class SideEngine:
                 self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
             for z in zones:
                 self.setups.start(z, liq, i, atr)
+        trend = {n: t.update(self.bars) for n, t in self.trends.items()}
+        for book in self.levels.values():
+            book.update(self.bars)
         entries = self.setups.update(self.bars)
+        for e in entries:
+            e.features.update(self._context(e, trend))
         # an untraded touch by an opposing bar moves a left zone (Spec §5.2 amendment)
         running = {s.zone.zone_id for s in self.setups.pending}
         self.zones.relocate_touched(self.bars, running)
         return entries
+
+    def _context(self, e: Entry, trend: dict[int, int]) -> dict[str, object]:
+        out: dict[str, object] = {f"trend_bos{n}": v for n, v in trend.items()}
+        for half in HHHL_HALVES:
+            out[f"trend_hhhl{half}"] = hh_hl(self.bars, half)
+        risk = e.entry - e.stop
+        for n, book in self.levels.items():
+            level = book.nearest_above(e.entry)
+            out[f"level{n}_r"] = (
+                (level - e.entry) / risk if level is not None and risk > 0 else None
+            )
+        return out
 
 
 class LsdStrategy:
