@@ -87,7 +87,13 @@ For each bar during the build phase, in this order:
 2. Otherwise, if geometry is still pending, this bar is **F** (the follow-up bar) and fixes the geometry (§5.3).
 3. **Death during build:** `close < bot`. Counter: `zone_died_building`.
 
-Once the zone has been left, relocation no longer applies. Any later return is a tap attempt or destroys the zone (§5.4).
+**Relocation after the zone has been left** (amendment 2026-09-25, decided on trade #137 of the SPXUSD 2025 review): an opposing bar that touches the zone (a wick is enough: `low ≤ top and high ≥ bot`) moves the zone onto that bar exactly as in the build phase — new O, geometry pending, the zone must be left again before it can be tapped — **provided no setup is running for this zone**. Order on each bar:
+
+1. Destruction (§5.4) is checked first: an opposing bar that closes inside the zone destroys it; it does not relocate it.
+2. Sweeps and setups of the bar are processed. A setup running for the zone — started on an earlier bar or by a sweep on this very bar — makes the touch a **tap** (§7), not a relocation.
+3. Only then, a touching opposing bar relocates the zone. If another zone already starts on that bar, the zone dies as a duplicate.
+
+Liquidity P′ must lie after the zone's *current* origin bar (§6), so liquidity formed before a relocation no longer counts for the moved zone.
 
 ### 5.3 Geometry
 
@@ -218,6 +224,7 @@ The **defaults are the primary hypothesis**. Every variant tested is counted, an
 | Concurrent positions | 1 | unlimited (setting) | measure the raw signal first |
 | Sizing | 150 USD, integer contracts | research mode: exactly 1R | equal risk per trade; dollar risk irrelevant at this stage |
 | Extra zones | — | `extraZones` setting | open question, answered by data |
+| Relocation after leaving | only during the build phase | also after the zone is left, while no setup runs (§5.2) | an untraded touch by an opposing bar makes that bar the zone (review of trade #137) |
 
 ## 11. Acceptance scenarios
 
