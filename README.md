@@ -46,3 +46,16 @@ Each run writes `runs/<timestamp>_<instrument>_<fingerprint>/` with `meta.json` 
 checksums, git commit), `trades.parquet`, `events.parquet` and a descriptive `summary.md`.
 Results are in R, net of commission and slippage. A backtest summary is not a verdict on the
 strategy; that needs the out-of-sample methodology of sub-project 3.
+
+## Checking the engine by eye
+
+```bash
+lsd review runs/<run-folder> --n 10 --seed 1
+lsd inspect-at data/histdata/HISTDATA_COM_ASCII_SPXUSD_M1_2025.zip --at "2025-02-27 08:05"
+```
+
+`review` draws random trades and rejected near-miss setups of a run (seed recorded) and
+writes charts plus an `index.html` to look through. `inspect-at` replays the strategy up to a
+moment and charts every zone and open liquidity in view, with the rule events that led there
+(also saved as a `.txt`) — the answer to "why was there no setup here?".
+
