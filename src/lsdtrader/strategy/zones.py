@@ -141,6 +141,12 @@ class ZoneBook:
     def _build_step(self, bars: Sequence[TickBar], z: Zone, k: int) -> None:
         bar = bars[k]
         if is_opposing(bar, self._cfg.doji_tol_ticks) and z.overlaps(bar):
+            if k in self._origins:
+                # Another zone already starts on this bar; moving here would copy it.
+                z.state = "dead"
+                self._log.emit("zone_duplicate", zone_id=z.zone_id, o_idx=k)
+                return
+            self._origins.add(k)
             z.o_idx, z.top, z.bot = k, bar.high, bar.low
             self._origins.add(k)
             z.kind, z.pending = "normal", True

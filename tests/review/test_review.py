@@ -41,9 +41,8 @@ def histdata_zip(path: Path, bars: list[TickBar]) -> Path:
     return path
 
 
-def test_window_is_capped() -> None:
-    assert _window(0, 1000) == (1000 - MAX_BARS, 1000)
-    assert _window(900, 1000) == (900, 1000)
+def test_short_window_is_shown_whole() -> None:
+    assert _window(900, 950, 1000) == (900, 1000)
 
 
 def event(bar: int, side: str, kind: str, **detail: object) -> dict[str, object]:
@@ -102,3 +101,20 @@ def test_backtest_review_and_inspect_commands(tmp_path: Path) -> None:
     at = f"{BARS[16].ts:%Y-%m-%d %H:%M}"
     assert main(["inspect-at", str(data), "--at", at, "--out", str(out)]) == 0
     assert out.exists() and " entry " in out.with_suffix(".txt").read_text(encoding="utf-8")
+
+
+def test_window_keeps_the_setup_and_clips_the_aftermath() -> None:
+    # Review finding: the cap kept the last bars and cut off zone origin and P'.
+    assert _window(980, 1060, 1520) == (980, 980 + MAX_BARS)
+    # a very old zone: the setup (liquidity to entry) must stay in view
+    first, last = _window(-20, 2830, 2840)
+    assert last - first == MAX_BARS and first <= 2780 and last >= 2830
+
+
+def test_review_refuses_changed_data(tmp_path: Path) -> None:
+    data = histdata_zip(tmp_path / "spx.zip", BARS)
+    assert main(["backtest", str(data), "--out", str(tmp_path / "runs")]) == 0
+    (run,) = (tmp_path / "runs").iterdir()
+    histdata_zip(data, BARS[:-1])  # same file name, different content
+    with pytest.raises(SystemExit):
+        build_review(run)

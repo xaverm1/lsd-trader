@@ -196,3 +196,16 @@ def test_consumed_zone_records_its_end() -> None:
     book.update(make_bars(*LEFT, (124, 125, 120, 124)))
     book.consume(zone)
     assert zone.ended_idx == 3
+
+
+def test_relocation_onto_another_zones_origin_drops_the_duplicate() -> None:
+    # Review finding: 75 of 868 SPX 2025 trades were exact duplicates, because a zone could
+    # relocate onto a bar that already was the origin of another zone.
+    bars = make_bars(O_BAR, (104, 106, 98, 99), (99, 120, 99, 119))
+    log = EventLog()
+    book = ZoneBook(StrategyConfig(), log)
+    (b,) = book.create(bars, bos_at(1, 2))  # origin bar 1
+    (a,) = book.create(bars, bos_at(0, 2))  # origin bar 0, relocates onto bar 1
+    assert b.o_idx == 1 and b.live
+    assert a.state == "dead" and "zone_duplicate" in log.kinds()
+    assert book.live() == [b]

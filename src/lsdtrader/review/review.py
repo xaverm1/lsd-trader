@@ -20,6 +20,7 @@ import pyarrow.parquet as pq
 from lsdtrader.core.bar import TickBar
 from lsdtrader.core.instrument import Instrument
 from lsdtrader.data.load import LoadedData, load_data
+from lsdtrader.journal.writer import sha256_file
 from lsdtrader.viz.chart import Box, ChartSpec, Level, Marker, render
 
 REJECTION_KINDS = ("no_tap", "no_entry", "setup_zone_gone")
@@ -46,7 +47,14 @@ class RunData:
 def load_run(folder: Path) -> RunData:
     meta = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
     files = [Path(d["path"]) for d in meta["data"]]
+    for entry, path in zip(meta["data"], files, strict=True):
+        if not path.exists():
+            raise SystemExit(f"data file of this run not found: {path}")
+        if sha256_file(path) != entry["sha256"]:
+            raise SystemExit(f"{path} changed since the run; charts would show the wrong bars")
     data = load_data(files, meta["instrument"]["root"])
+    if len(data.bars) != meta["n_bars"]:
+        raise SystemExit(f"run had {meta['n_bars']} bars, the data now gives {len(data.bars)}")
     trades = pq.read_table(folder / "trades.parquet").to_pylist()
     kinds = ["setup_started", *REJECTION_KINDS]
     events = pq.read_table(folder / "events.parquet", filters=[("kind", "in", kinds)]).to_pylist()
@@ -58,14 +66,21 @@ def bar_index(times: list[datetime], ts: datetime) -> int:
     return max(bisect.bisect_right(times, ts) - 1, 0)
 
 
-def _window(first: int, last: int) -> tuple[int, int]:
-    return max(first, last - MAX_BARS), last
+def _window(first: int, anchor: int, last: int) -> tuple[int, int]:
+    """Bars to show. Prefer [first, last]; if that is longer than MAX_BARS, keep the setup
+    (everything up to `anchor`) and clip the aftermath, then the oldest part of the zone."""
+    if last - first <= MAX_BARS:
+        return first, last
+    end = max(anchor, first + MAX_BARS)
+    return end - MAX_BARS, end
 
 
 def trade_spec(t: dict[str, Any], times: list[datetime], inst: Instrument) -> ChartSpec:
     exit_idx = bar_index(times, t["exit_ts"])
     entry = t["entry_bar"]
-    first, last = _window(min(t["zone_o_idx"], t["liq_idx"]) - MARGIN, exit_idx + MARGIN)
+    first, last = _window(
+        min(t["zone_o_idx"], t["liq_idx"]) - MARGIN, entry + MARGIN, exit_idx + MARGIN
+    )
     color = "#1D9E75" if t["net_r"] > 0 else "#D85A30"
     price = inst.to_price
     return ChartSpec(
@@ -130,7 +145,8 @@ def rejections(events: list[dict[str, Any]]) -> list[Rejection]:
 def rejection_spec(r: Rejection, times: list[datetime], inst: Instrument) -> ChartSpec:
     s = r.start
     top, bot = s["zone_top"], s["zone_bot"]
-    first, last = _window(min(s["zone_o_idx"], s["liq_idx"]) - MARGIN, r.end_idx + MARGIN)
+    end = r.end_idx + MARGIN
+    first, last = _window(min(s["zone_o_idx"], s["liq_idx"]) - MARGIN, end, end)
     return ChartSpec(
         first=first,
         last=last,
