@@ -65,7 +65,8 @@ def load_run(folder: Path) -> RunData:
             raise SystemExit(f"data file of this run not found: {path}")
         if sha256_file(path) != entry["sha256"]:
             raise SystemExit(f"{path} changed since the run; charts would show the wrong bars")
-    data = load_data(files, meta["instrument"]["root"])
+    bar_minutes = meta["execution_config"].get("bar_minutes", 5)
+    data = load_data(files, meta["instrument"]["root"], bar_minutes)
     if len(data.bars) != meta["n_bars"]:
         raise SystemExit(f"run had {meta['n_bars']} bars, the data now gives {len(data.bars)}")
     trades = pq.read_table(folder / "trades.parquet").to_pylist()

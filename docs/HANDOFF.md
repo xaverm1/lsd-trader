@@ -232,6 +232,17 @@ entries come in the first 15m bar after the tap; the entry sits a median $0.28 a
 liquidity. (The "no TP" row, +0.61 R/T at 0.8 % winners, is a handful of multi-day runners
 while holding overnight, not an edge.)
 
+### SPX, 30m zones, 1-minute reclaim entry (2026-09-25)
+
+`--timeframe 30 --hold-overnight --set entry_mode=reclaim_1m` on SPXUSD 2020-2025 (no trend
+rules): 686 trades (114/yr), median stop 8.3 pts, gross TP4 +0.073 R/T (t 0.9), TP6 +0.126
+(t 1.2), TP10 +0.25 (t 1.8; 13 levels looked at). With ~0.6 pt ES cost (0.10 R): TP6 +0.03
+R/T net. Carried by 2023 (+0.54 R/T at TP6) and 2020 (+0.26); 2022 and 2025 negative.
+Charts to check the entry: `scripts/reclaim_charts.py RUN N SEED` (30m context + 1-minute
+detail per trade). Checked: entry on the first minute after the tap bar closing beyond P',
+stop at the extreme since the sweep - as specified. Open point: when price already reclaimed
+P' inside the tap bar, the entry is simply the first minute after the tap bar.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
