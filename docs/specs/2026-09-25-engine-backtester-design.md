@@ -171,7 +171,7 @@ Databento could not be used: the only available card was rejected at signup befo
 
 Decision (Xaver, 2026-09-25):
 
-- **Primary source for building and first tests: HistData.com free 1-minute CFD data** (SPX/USD, NSX/USD, XAU/USD, XAG/USD, WTI/USD; bid only, no volume; timestamps EST without DST, converted to UTC). Downloaded so far: SPX/USD 2020–2025.
+- **Primary source for building and first tests: HistData.com free 1-minute CFD data** (SPX/USD, NSX/USD, XAU/USD, XAG/USD, WTI/USD; bid only, no volume). **Correction after review:** the HistData clock is *not* fixed EST; it is Europe/Berlin time minus 6 hours (UTC−5 in European winter, UTC−4 in European summer), verified on SPXUSD 2020 against the daily 16:14 New York halt. The data report treats a pause as an expected break only if trading resumes at 18:00 New York; every other pause of 15 minutes or more is listed, so data holes and time-zone errors surface.. Downloaded so far: SPX/USD 2020–2025.
 - **Dukascopy CSV exports** are supported as a second CFD source (manual, small samples).
 - **Futures data** (Databento or a prop-firm Rithmic feed) stays planned as a second source; §4.1–4.2 (fetch, roll, Panama adjustment) move to that later plan. CFDs have no contract roll.
 - **CFD cost model:** a fixed spread per instrument, paid once per trade on entry (bars are bid prices); commission 0, slippage 0. Values are placeholders until measured (Dukascopy exports bid and ask, so the spread can be measured there).

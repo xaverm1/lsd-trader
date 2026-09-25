@@ -7,16 +7,16 @@ import pytest
 
 from lsdtrader.cli import main
 
-START = datetime(2025, 1, 2, 9, 30)  # EST
+START = datetime(2025, 1, 2, 9, 30)  # HistData clock (Berlin time - 6 h)
 
 
-def histdata_zip(path: Path, n: int) -> Path:
+def histdata_zip(path: Path, n: int, symbol: str = "SPXUSD") -> Path:
     rows = [
         f"{START + timedelta(minutes=i):%Y%m%d %H%M%S};5000.000;5000.500;4999.500;5000.250;0"
         for i in range(n)
     ]
     with zipfile.ZipFile(path, "w") as z:
-        z.writestr("DAT_ASCII_SPXUSD_M1_2025.csv", "\n".join(rows) + "\n")
+        z.writestr(f"DAT_ASCII_{symbol}_M1_2025.csv", "\n".join(rows) + "\n")
     return path
 
 
@@ -50,3 +50,18 @@ def test_dukascopy_needs_instrument(tmp_path: Path, capsys: pytest.CaptureFixtur
         main(["data-report", str(f)])
     assert main(["data-report", str(f), "--instrument", "USA500.IDX/USD"]) == 0
     assert "# Data report SPXUSD" in capsys.readouterr().out
+
+
+def test_files_of_different_symbols_are_refused(tmp_path: Path) -> None:
+    # Review finding: mixing instruments silently dropped one of them as "duplicates".
+    spx = histdata_zip(tmp_path / "spx.zip", 5)
+    nsx = histdata_zip(tmp_path / "nsx.zip", 5, "NSXUSD")
+    with pytest.raises(SystemExit):
+        main(["data-report", str(spx), str(nsx)])
+
+
+def test_instrument_must_match_histdata_symbol(tmp_path: Path) -> None:
+    spx = histdata_zip(tmp_path / "spx.zip", 5)
+    with pytest.raises(SystemExit):
+        main(["data-report", str(spx), "--instrument", "XAUUSD"])
+    assert main(["data-report", str(spx), "--instrument", "USA500.IDX/USD"]) == 0

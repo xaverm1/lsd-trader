@@ -1,7 +1,9 @@
 """Loaders for 1-minute bar files: HistData.com ASCII zips and Dukascopy CSV exports.
 
 HistData:  zip containing DAT_ASCII_<SYMBOL>_M1_<YEAR>.csv, rows `YYYYMMDD HHMMSS;O;H;L;C;V`,
-           timestamps in EST without daylight saving (fixed UTC-5), bid prices.
+           bid prices. The file clock is Europe/Berlin time minus 6 hours: UTC-5 in
+           European winter, UTC-4 in European summer (verified on SPXUSD 2020 against
+           the daily 16:14 New York halt).
 Dukascopy: CSV with header `Etc/UTC,Open,High,Low,Close,Volume`, ISO timestamps in UTC.
 Both return 1-minute TickBars in UTC. `load_minute_files` merges files, sorts, and drops
 repeated timestamps, returning how many it dropped so the data report can show it.
@@ -13,13 +15,15 @@ import csv
 import re
 import zipfile
 from collections.abc import Iterable, Sequence
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from lsdtrader.core.bar import TickBar
 from lsdtrader.core.instrument import Instrument
 
-HISTDATA_TZ = timezone(timedelta(hours=-5))
+BERLIN = ZoneInfo("Europe/Berlin")
+HISTDATA_SHIFT = timedelta(hours=6)  # file clock = Berlin time - 6 h
 HISTDATA_NAME = re.compile(r"DAT_ASCII_([A-Z0-9]+)_M1_\d{4,6}\.csv$", re.IGNORECASE)
 
 
@@ -46,8 +50,8 @@ def read_histdata_zip(path: Path, inst: Instrument) -> list[TickBar]:
         if not line.strip():
             continue
         stamp, o, h, lo, c, _vol = line.split(";")
-        local = datetime.strptime(stamp, "%Y%m%d %H%M%S").replace(tzinfo=HISTDATA_TZ)
-        bars.append(_bar(inst, local.astimezone(UTC), o, h, lo, c))
+        berlin = (datetime.strptime(stamp, "%Y%m%d %H%M%S") + HISTDATA_SHIFT).replace(tzinfo=BERLIN)
+        bars.append(_bar(inst, berlin.astimezone(UTC), o, h, lo, c))
     return bars
 
 

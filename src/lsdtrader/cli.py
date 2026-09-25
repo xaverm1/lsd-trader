@@ -64,13 +64,16 @@ def load_data(files: Sequence[Path], instrument: str | None) -> LoadedData:
     if len(files) == 1 and files[0].suffix.lower() == ".json":
         inst, bars = load_tradingview_json(files[0])
         return LoadedData(inst, bars, None, [], "tradingview 5m")
-    root = instrument
-    if root is None:
-        zips = [f for f in files if f.suffix.lower() == ".zip"]
-        if not zips:
+    symbols = {histdata_symbol(f) for f in files if f.suffix.lower() == ".zip"}
+    if len(symbols) > 1:
+        raise SystemExit(f"files are for different instruments: {sorted(symbols)}")
+    if instrument is None:
+        if not symbols:
             raise SystemExit("--instrument is required for Dukascopy CSV files")
-        root = histdata_symbol(zips[0])
-    inst = get_instrument(root)
+        (instrument,) = symbols
+    inst = get_instrument(instrument)
+    if symbols and get_instrument(next(iter(symbols))) is not inst:
+        raise SystemExit(f"--instrument {instrument} does not match the files ({symbols.pop()})")
     minute_bars, dropped = load_minute_files(files, inst)
     bars, minutes = to_five_minute(minute_bars)
     return LoadedData(inst, bars, minutes, minute_bars, "1m files aggregated to 5m", dropped)

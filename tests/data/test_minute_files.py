@@ -22,16 +22,22 @@ def histdata_zip(path: Path, rows: list[str], symbol: str = "SPXUSD", year: int 
     return path
 
 
-def test_histdata_timestamps_are_est_without_dst(tmp_path: Path) -> None:
+def test_histdata_clock_is_berlin_time_minus_six_hours(tmp_path: Path) -> None:
+    # Review finding (verified on SPXUSD 2020): the daily CFD halt starts 16:14 New York time
+    # every day, but the file shows 15:14 in the weeks where US and EU daylight saving differ.
     rows = [
-        "20250102 093000;5898.434000;5898.434000;5892.620000;5894.623000;0",
-        "20250702 093000;6200.000000;6201.500000;6199.250000;6200.750000;0",
+        "20200115 161400;1;1;1;1;0",  # winter: file = UTC-5
+        "20200310 151400;1;1;1;1;0",  # US summer, EU winter: file = UTC-5
+        "20200331 161400;1;1;1;1;0",  # both summer: file = UTC-4
+        "20201028 151400;1;1;1;1;0",  # EU winter again, US still summer: file = UTC-5
     ]
     bars = read_histdata_zip(histdata_zip(tmp_path / "a.zip", rows), SPX)
-    # 09:30 EST is 14:30 UTC, in winter and in summer alike (fixed UTC-5)
-    assert bars[0].ts == datetime(2025, 1, 2, 14, 30, tzinfo=UTC)
-    assert bars[1].ts == datetime(2025, 7, 2, 14, 30, tzinfo=UTC)
-    assert (bars[0].open, bars[0].low) == (5898434, 5892620)
+    assert [b.ts for b in bars] == [
+        datetime(2020, 1, 15, 21, 14, tzinfo=UTC),
+        datetime(2020, 3, 10, 20, 14, tzinfo=UTC),
+        datetime(2020, 3, 31, 20, 14, tzinfo=UTC),
+        datetime(2020, 10, 28, 20, 14, tzinfo=UTC),
+    ]
 
 
 def test_histdata_symbol_from_zip(tmp_path: Path) -> None:
