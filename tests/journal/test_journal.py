@@ -37,6 +37,14 @@ BASE = Trade(
     0.12,
     4.0,
     0.0,
+    16,
+    111,
+    106,
+    6,
+    11,
+    113,
+    15,
+    15,
 )
 
 
@@ -90,3 +98,13 @@ def test_same_input_same_journal_content(tmp_path: Path) -> None:
     fa = json.loads((a / "meta.json").read_text(encoding="utf-8"))["fingerprint"]
     fb = json.loads((b / "meta.json").read_text(encoding="utf-8"))["fingerprint"]
     assert fa == fb
+
+
+def test_journal_rows_carry_times_instrument_and_geometry(tmp_path: Path) -> None:
+    bars = FULL_LONG + make_bars((114, 120, 113, 119), (119, 131, 118, 130), start=17)
+    folder = write_run(run_backtest(INST, bars), tmp_path / "runs")
+    (t,) = [r for r in pq.read_table(folder / "trades.parquet").to_pylist() if r["side"] == "long"]
+    assert t["zone_top_price"] == 27.75 and t["liq_level_price"] == 28.25
+    assert t["entry_weekday"] == 1 and t["entry_time_ct"] == "09:50"  # Tue 2024-01-02, 15:50 UTC
+    e = pq.read_table(folder / "events.parquet").to_pylist()[0]
+    assert e["instrument"] == "TEST" and e["ts"] is not None

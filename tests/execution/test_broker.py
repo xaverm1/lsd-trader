@@ -131,3 +131,23 @@ def test_close_all_at_end_of_data() -> None:
     _, broker, _ = run(signal(), [bar(100, 110, 95, 105)])
     (t,) = broker.close_all(bar(105, 106, 104, 106, minute=10))
     assert (t.exit_reason, t.exit_fill) == ("end_of_data", 105)
+
+
+def test_gap_exits_update_excursions() -> None:
+    # Review finding: a gap exit must count the gap in MFE/MAE.
+    (t,), _, _ = run(signal(), [bar(80, 85, 78, 84)])
+    assert t.mae_r == pytest.approx(2.0)  # entry 100, stop 90, filled from open 80
+    (t,), _, _ = run(signal(), [bar(150, 151, 149, 150)])
+    assert t.mfe_r == pytest.approx(4.0)
+
+
+def test_explicit_break_flag_overrides_calendar() -> None:
+    # Holiday early close: the runner knows a break follows even when the calendar does not.
+    log = EventLog()
+    broker = SimBroker(INST, ExecutionConfig(), log)
+    broker.submit([signal()], bar(100, 100, 100, 100, minute=0))
+    b = bar(100, 110, 95, 105)
+    (t,) = broker.on_bar(b, [b], last_before_break=True)
+    assert t.exit_reason == "flat_break"
+    broker.submit([signal()], b, last_before_break=True)
+    assert broker.positions == [] and "entry_before_break" in log.kinds()

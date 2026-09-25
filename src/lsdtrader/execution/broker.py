@@ -74,7 +74,17 @@ class Trade:
     cost_r: float
     mfe_r: float
     mae_r: float
+    entry_bar: int
+    zone_top: int
+    zone_bot: int
+    zone_o_idx: int
+    liq_idx: int
+    liq_level: int
+    sweep_idx: int
+    tap_idx: int
     features: dict[str, object] = field(default_factory=dict)
+    sweep_ts: datetime | None = None  # filled in by the runner, which knows bar times
+    tap_ts: datetime | None = None
 
 
 class SimBroker:
@@ -87,12 +97,16 @@ class SimBroker:
 
     # -- step 1 of every bar: manage open positions --------------------------
 
-    def on_bar(self, bar: TickBar, minutes: Sequence[TickBar]) -> list[Trade]:
+    def on_bar(
+        self, bar: TickBar, minutes: Sequence[TickBar], last_before_break: bool | None = None
+    ) -> list[Trade]:
+        """`last_before_break` overrides the regular CME calendar (e.g. holiday early closes)."""
+        brk = self._is_break(bar, last_before_break)
         closed: list[Trade] = []
         still_open: list[Position] = []
         for pos in self.positions:
             trade = self._resolve(pos, minutes)
-            if trade is None and self.cfg.flat_before_break and is_last_bar_before_break(bar.ts):
+            if trade is None and brk:
                 trade = self._close(pos, bar.close, bar.ts, "flat_break", slip=True)
             if trade is None:
                 still_open.append(pos)
@@ -111,9 +125,12 @@ class SimBroker:
 
     # -- step 6 of every bar: open positions from signals ------------------
 
-    def submit(self, signals: Sequence[Signal], bar: TickBar) -> None:
+    def submit(
+        self, signals: Sequence[Signal], bar: TickBar, last_before_break: bool | None = None
+    ) -> None:
+        brk = self._is_break(bar, last_before_break)
         for sig in signals:
-            reason = self._reject_reason(bar)
+            reason = self._reject_reason(bar, brk)
             risk_ticks = abs(sig.entry - sig.stop)
             qty = self._qty(risk_ticks)
             if reason is None and qty <= 0:
@@ -128,9 +145,14 @@ class SimBroker:
 
     # -- internals ---------------------------------------------------------
 
-    def _reject_reason(self, bar: TickBar) -> str | None:
+    def _is_break(self, bar: TickBar, override: bool | None) -> bool:
+        if not self.cfg.flat_before_break:
+            return False
+        return is_last_bar_before_break(bar.ts) if override is None else override
+
+    def _reject_reason(self, bar: TickBar, brk: bool) -> str | None:
         cfg = self.cfg
-        if cfg.flat_before_break and is_last_bar_before_break(bar.ts):
+        if brk:
             return "entry_before_break"
         if cfg.session_window is not None:
             start, end = cfg.session_window
@@ -148,8 +170,10 @@ class SimBroker:
         d, sig = pos.d, pos.signal
         for m in minutes:
             if d * (m.open - sig.stop) <= 0:  # gapped through the stop
+                pos.worst = min(pos.worst, m.open) if d == 1 else max(pos.worst, m.open)
                 return self._close(pos, m.open, m.ts, "sl", slip=True)
             if d * (m.open - sig.target) >= 0:  # gapped through the target: limit fills at target
+                pos.best = max(pos.best, m.open) if d == 1 else min(pos.best, m.open)
                 return self._close(pos, sig.target, m.ts, "tp", slip=False)
             fav, adv = (m.high, m.low) if d == 1 else (m.low, m.high)
             hit_sl = d * (adv - sig.stop) <= 0
@@ -173,8 +197,12 @@ class SimBroker:
         pnl -= 2 * inst.commission_per_side * pos.qty
         net_r = pnl / (risk * inst.tick_value * pos.qty)
         gross_r = d * (price - sig.entry) / risk
-        best = min(pos.best, sig.target) if d == 1 else max(pos.best, sig.target)
-        worst = max(pos.worst, sig.stop) if d == 1 else min(pos.worst, sig.stop)
+        # Excursions stop at the exit: favourable at the target, adverse at the stop
+        # unless a gap filled beyond it.
+        if d == 1:
+            best, worst = min(pos.best, sig.target), max(pos.worst, min(sig.stop, price))
+        else:
+            best, worst = max(pos.best, sig.target), min(pos.worst, max(sig.stop, price))
         self._log.emit("exit", setup_id=sig.setup_id, reason=reason)
         return Trade(
             instrument=inst.root,
@@ -197,5 +225,13 @@ class SimBroker:
             cost_r=gross_r - net_r,
             mfe_r=d * (best - sig.entry) / risk,
             mae_r=d * (sig.entry - worst) / risk,
+            entry_bar=sig.bar_index,
+            zone_top=sig.zone_top,
+            zone_bot=sig.zone_bot,
+            zone_o_idx=sig.zone_o_idx,
+            liq_idx=sig.liq_idx,
+            liq_level=sig.liq_price,
+            sweep_idx=sig.sweep_idx,
+            tap_idx=sig.tap_idx,
             features=dict(sig.features),
         )

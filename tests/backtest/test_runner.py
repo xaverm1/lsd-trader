@@ -39,3 +39,33 @@ def test_minute_bars_are_used_when_given() -> None:
 def test_empty_input() -> None:
     result = run_backtest(INST, [])
     assert result.trades == [] and result.n_bars == 0
+
+
+def test_incomplete_minutes_fall_back_to_the_five_minute_bar() -> None:
+    # Review finding: minutes that do not reach the 5-minute low must not hide a stop.
+    five = make_bars((114, 116, 105, 108), start=17)  # low 105 hits the stop at 110
+    minutes = {five[0].ts: make_bars((114, 116, 112, 115), start=17)}  # low only 112
+    result = run_backtest(INST, FULL_LONG + five, minutes)
+    (t,) = [t for t in result.trades if t.side == "long"]
+    assert t.exit_reason == "sl"
+    assert any(e.kind == "minutes_incomplete" for e in result.events)
+
+
+def test_long_gap_in_bars_is_treated_as_a_break() -> None:
+    # Holiday early close: next bar starts hours later -> flat on the last bar before the gap.
+    from datetime import timedelta
+
+    later = make_bars((114, 118, 113, 117), start=17)
+    gap = make_bars((117, 119, 116, 118), start=17 + 36)  # 3 hours later
+    result = run_backtest(INST, FULL_LONG + later + gap)
+    (t,) = [t for t in result.trades if t.side == "long"]
+    assert (t.exit_reason, t.exit_ts) == ("flat_break", later[0].ts)
+    assert gap[0].ts - later[0].ts == timedelta(hours=3)
+
+
+def test_trade_records_setup_geometry_and_times() -> None:
+    result = run_backtest(INST, FULL_LONG + TO_TARGET)
+    (t,) = [t for t in result.trades if t.side == "long"]
+    assert (t.zone_top, t.zone_bot, t.liq_level) == (111, 106, 113)
+    assert (t.sweep_ts, t.tap_ts) == (FULL_LONG[15].ts, FULL_LONG[15].ts)
+    assert result.bar_times[16] == FULL_LONG[16].ts

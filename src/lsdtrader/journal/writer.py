@@ -16,9 +16,20 @@ import pyarrow.parquet as pq
 
 import lsdtrader
 from lsdtrader.backtest.runner import RunResult
+from lsdtrader.core.calendar import CHICAGO
 from lsdtrader.journal.summary import render_markdown, summarize
 
-PRICE_FIELDS = ("entry_signal", "entry_fill", "stop", "target", "exit_raw", "exit_fill")
+PRICE_FIELDS = (
+    "entry_signal",
+    "entry_fill",
+    "stop",
+    "target",
+    "exit_raw",
+    "exit_fill",
+    "zone_top",
+    "zone_bot",
+    "liq_level",
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -46,15 +57,21 @@ def trade_rows(result: RunResult) -> list[dict[str, Any]]:
         row = {k: v for k, v in asdict(t).items() if k != "features"}
         for k in PRICE_FIELDS:
             row[f"{k}_price"] = float(inst.to_price(row[k]))
+        local = t.entry_ts.astimezone(CHICAGO)
+        row["entry_time_ct"] = f"{local:%H:%M}"
+        row["entry_weekday"] = local.weekday()
         row.update({f"feat_{k}": v for k, v in t.features.items()})
         rows.append(row)
     return rows
 
 
 def event_rows(result: RunResult) -> list[dict[str, Any]]:
+    times = result.bar_times
     return [
         {
             "bar_index": e.bar_index,
+            "ts": times[e.bar_index] if 0 <= e.bar_index < len(times) else None,
+            "instrument": result.instrument.root,
             "side": e.side,
             "kind": e.kind,
             "detail": json.dumps(e.detail, sort_keys=True, default=str),
