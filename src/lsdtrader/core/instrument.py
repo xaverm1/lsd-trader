@@ -58,7 +58,7 @@ INSTRUMENTS: dict[str, Instrument] = {
         # CFDs (HistData / Dukascopy). Spreads are PLACEHOLDERS for typical retail quotes.
         _cfd("SPXUSD", "0.4"),
         _cfd("NSXUSD", "1.0"),
-        _cfd("XAUUSD", "0.25"),
+        _cfd("XAUUSD", "0"),  # spread left out while developing rules (was 0.25)
         _cfd("XAGUSD", "0.02"),
         _cfd("WTIUSD", "0.03"),
     )

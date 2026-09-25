@@ -51,3 +51,9 @@ def test_cfd_specs_and_aliases() -> None:
     assert spx.commission_per_side == 0.0 and spx.slippage_ticks == 0
     assert get_instrument("USA500.IDX/USD") is spx
     assert get_instrument("usatechidxusd").root == "NSXUSD"
+
+
+def test_gold_cfd_is_costless_for_research() -> None:
+    # Spread left out on purpose while the rules are developed; gross R == net R.
+    xau = get_instrument("XAUUSD")
+    assert xau.spread_ticks == 0 and xau.slippage_ticks == 0 and xau.commission_per_side == 0.0

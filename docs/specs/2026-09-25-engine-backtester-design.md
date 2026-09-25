@@ -175,6 +175,8 @@ Decision (Xaver, 2026-09-25):
 - **Dukascopy CSV exports** are supported as a second CFD source (manual, small samples).
 - **Futures data** (Databento or a prop-firm Rithmic feed) stays planned as a second source; §4.1–4.2 (fetch, roll, Panama adjustment) move to that later plan. CFDs have no contract roll.
 - **CFD cost model:** a fixed spread per instrument, paid once per trade on entry (bars are bid prices); commission 0, slippage 0. Values are placeholders until measured (Dukascopy exports bid and ask, so the spread can be measured there).
+  *Amendment 2026-09-25:* XAUUSD spread set to 0 while the rules are developed; costs are
+  judged later on futures data. Gross R = net R for gold runs until then.
 - The CFD-vs-futures comparison (same rules, 1–2 tick differences) is kept as a research question for sub-project 3.
 
 ## 13. Acceptance log

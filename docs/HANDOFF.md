@@ -64,6 +64,14 @@ Same run reproduced exactly (6736 trades, -2162.5 R). `scripts/stop_size.py`:
 - MGC is likely MORE expensive per ounce than the $0.25 CFD placeholder (~$0.55 incl. 1 tick
   slippage per side); GC ~$0.35. A stop buffer cannot be tested post hoc and needs a rerun.
 
+### Spread off (decided by Xaver 2026-09-25)
+
+XAUUSD spread is now 0 (no costs at all on gold): the rules are developed cost-free and
+costs are judged later on futures data. Zero-spread 2015-2021 = old gross: +0.041 R/trade,
++276 R, t=1.73; shorts +0.069 (t=2.0), longs +0.012; 2020 and 2021 negative.
+Keep in mind when judging a change: GC costs ~ $0.35/oz / stop in R (~0.4 R at the $0.90
+median stop), and the short-side bid-bar bias above still inflates short results.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
