@@ -14,7 +14,10 @@ CHICAGO = ZoneInfo("America/Chicago")
 HALT_START = time(16, 0)
 
 
-def is_last_bar_before_break(bar_start: datetime, bar_minutes: int = 5) -> bool:
-    """True if the bar ends exactly at the daily halt or the weekend close (16:00 CT)."""
+def is_last_bar_before_break(
+    bar_start: datetime, bar_minutes: int = 5, flat_at: time = HALT_START
+) -> bool:
+    """True if the bar ends exactly at `flat_at` CT on a weekday: by default the daily halt
+    and the weekend close (16:00 CT), or an earlier prop-firm flat time."""
     end = (bar_start + timedelta(minutes=bar_minutes)).astimezone(CHICAGO)
-    return end.weekday() < 5 and end.time() == HALT_START
+    return end.weekday() < 5 and end.time() == flat_at

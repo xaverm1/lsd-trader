@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from decimal import Decimal
 
 import pytest
@@ -43,6 +43,15 @@ def test_micro_and_mini_share_tick_size() -> None:
 )
 def test_last_bar_before_break(utc: datetime, expected: bool) -> None:
     assert is_last_bar_before_break(utc) is expected
+
+
+def test_last_bar_before_an_earlier_flat_time() -> None:
+    # Prop-firm flat time 15:10 CT: the bar 15:05-15:10 CT is the last one, summer and winter.
+    assert is_last_bar_before_break(datetime(2024, 1, 8, 21, 5, tzinfo=UTC), flat_at=time(15, 10))
+    assert is_last_bar_before_break(datetime(2024, 7, 12, 20, 5, tzinfo=UTC), flat_at=time(15, 10))
+    assert not is_last_bar_before_break(
+        datetime(2024, 1, 8, 21, 55, tzinfo=UTC), flat_at=time(15, 10)
+    )
 
 
 def test_cfd_specs_and_aliases() -> None:

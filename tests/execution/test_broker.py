@@ -95,18 +95,46 @@ def test_position_stays_open_without_hit() -> None:
     assert trades == [] and len(broker.positions) == 1
 
 
+CME_HALT = ExecutionConfig(flat_time=time(16, 0), session_window=None)
+
+
 def test_flat_before_break() -> None:
     # Scenario 16: the 5-minute bar 15:55-16:00 CT closes every open position.
     last = TickBar(datetime(2024, 1, 8, 21, 55, tzinfo=UTC), 100, 110, 95, 105)
-    (t,), _, _ = run(signal(), [last], five=last)
+    (t,), _, _ = run(signal(), [last], CME_HALT, five=last)
     assert (t.exit_reason, t.exit_raw, t.exit_fill) == ("flat_break", 105, 104)
 
 
 def test_no_entry_on_last_bar_before_break() -> None:
     log = EventLog()
-    broker = SimBroker(INST, ExecutionConfig(), log)
+    broker = SimBroker(INST, CME_HALT, log)
     broker.submit([signal()], TickBar(datetime(2024, 1, 8, 21, 55, tzinfo=UTC), 100, 100, 100, 100))
     assert broker.positions == [] and "entry_before_break" in log.kinds()
+
+
+def test_prop_firm_defaults_flat_at_1510_ct() -> None:
+    # Amendment 2026-09-25 (Topstep-style): everything is closed with the bar 15:05-15:10 CT.
+    last = TickBar(datetime(2024, 7, 8, 20, 5, tzinfo=UTC), 100, 110, 95, 105)  # summer, UTC-5
+    (t,), _, _ = run(signal(), [last], five=last)
+    assert t.exit_reason == "flat_break"
+
+
+@pytest.mark.parametrize(
+    ("utc", "allowed"),
+    [
+        (datetime(2024, 1, 8, 19, 55, tzinfo=UTC), True),  # 13:55 CT (20:55 Berlin)
+        (datetime(2024, 1, 8, 20, 0, tzinfo=UTC), False),  # 14:00 CT (21:00 Berlin)
+        (datetime(2024, 1, 8, 22, 55, tzinfo=UTC), False),  # 16:55 CT: still halted
+        (datetime(2024, 1, 8, 23, 0, tzinfo=UTC), True),  # 17:00 CT reopen (00:00 Berlin)
+        (datetime(2024, 3, 12, 19, 0, tzinfo=UTC), False),  # 14:00 CDT = 20:00 Berlin (DST gap)
+    ],
+)
+def test_prop_firm_defaults_no_entries_from_1400_ct_to_reopen(utc: datetime, allowed: bool) -> None:
+    log = EventLog()
+    broker = SimBroker(INST, ExecutionConfig(), log)
+    broker.submit([signal()], TickBar(utc, 100, 100, 100, 100))
+    assert bool(broker.positions) is allowed
+    assert ("entry_outside_session" in log.kinds()) is not allowed
 
 
 def test_realistic_sizing_rounds_down_and_skips_zero() -> None:
@@ -118,7 +146,9 @@ def test_realistic_sizing_rounds_down_and_skips_zero() -> None:
 
 
 def test_session_window_and_max_positions() -> None:
-    cfg = ExecutionConfig(session_window=(time(8, 0), time(9, 0)))  # T is 16:00 Berlin
+    cfg = ExecutionConfig(
+        session_window=(time(8, 0), time(9, 0)), session_tz="Europe/Berlin"
+    )  # T is 16:00 Berlin
     _, broker, log = run(signal(), [bar(100, 110, 95, 105)], cfg)
     assert broker.positions == [] and "entry_outside_session" in log.kinds()
     log = EventLog()

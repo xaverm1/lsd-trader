@@ -27,9 +27,13 @@ class ExecutionConfig:
     sizing: Literal["research", "realistic"] = "research"
     risk_usd: float = 100.0
     max_open_positions: int | None = None
-    session_window: tuple[time, time] | None = None  # new entries only if bar open is inside
-    session_tz: str = "Europe/Berlin"
+    # Prop-firm defaults (Topstep-style, spec amendment 2026-09-25), in exchange time (CT):
+    # new entries only from the 17:00 reopen to 14:00, everything flat with the bar ending at
+    # 15:10. A window with start > end wraps over midnight.
+    session_window: tuple[time, time] | None = (time(17, 0), time(14, 0))
+    session_tz: str = "America/Chicago"
     flat_before_break: bool = True
+    flat_time: time = time(15, 10)  # CT; time(16, 0) = the CME halt itself
 
     def __post_init__(self) -> None:
         if self.risk_usd <= 0:
@@ -149,7 +153,9 @@ class SimBroker:
     def _is_break(self, bar: TickBar, override: bool | None) -> bool:
         if not self.cfg.flat_before_break:
             return False
-        return is_last_bar_before_break(bar.ts) if override is None else override
+        if override is not None:
+            return override
+        return is_last_bar_before_break(bar.ts, flat_at=self.cfg.flat_time)
 
     def _reject_reason(self, bar: TickBar, brk: bool) -> str | None:
         cfg = self.cfg
@@ -157,7 +163,9 @@ class SimBroker:
             return "entry_before_break"
         if cfg.session_window is not None:
             start, end = cfg.session_window
-            if not start <= bar.ts.astimezone(self._tz).time() < end:
+            t = bar.ts.astimezone(self._tz).time()
+            inside = start <= t < end if start <= end else (t >= start or t < end)
+            if not inside:
                 return "entry_outside_session"
         if cfg.max_open_positions is not None and len(self.positions) >= cfg.max_open_positions:
             return "max_open_positions"

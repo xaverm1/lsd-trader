@@ -106,6 +106,19 @@ NY afternoon 18-24 -0.027. No time filter adopted; a session filter would be a h
 for 2022-2023, not a finding. Rerun with the fixed clock (picture updated): same picture,
 09-10 +0.21 R/T (N=381, t=1.9), 04-05 -0.17 (N=166), 18-19 -0.14 (N=185); still no |t| >= 2.
 
+### Prop-firm trading hours (decided by Xaver 2026-09-25, now the default)
+
+Topstep-style rule, reason is the prop firm, not the hour table: no new entries 14:00-17:00 CT
+(21-24 Berlin, one hour earlier in DST-mismatch weeks), everything flat with the bar ending
+15:10 CT (22:10 Berlin). Defined in Chicago time (`ExecutionConfig.session_window`,
+`flat_time`; spec §8.2 amendment). For the old behaviour pass
+`ExecutionConfig(session_window=None, flat_time=time(16, 0))`.
+Gold 2015-2021, no costs, fixed clock: 6737 -> **6407 trades, +264 R -> +301 R, +0.039 ->
++0.047 R/trade, t 1.66 -> 1.91**. Per year: 2015 +50, 2016 +53, 2017 +45, 2018 +129,
+2019 +109, 2020 -12, 2021 -74 R. The improvement is not evidence (the cut happens to remove
+three negative hours seen in the table). Worth a look: the SL/TP exits alone are -112 R; the
+whole profit comes from the 395 forced 15:10 CT exits (+1.04 R/trade, +413 R).
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing

@@ -166,6 +166,7 @@ Multiple P′ per zone are allowed; whichever is swept first starts the setup. I
 - **Gaps:** if a bar opens beyond the SL, the stop fills at the open.
 - **Flat before breaks:** any open position is closed at the close of the last bar before each CME daily maintenance break and before the weekend close (CME calendar, including DST changes and holidays). No new entries on that last bar.
 - **Sessions:** entries allowed around the clock by default. Setting `sessionWindow` (default off) restricts new entries to a time window.
+- **Prop-firm trading hours** (amendment 2026-09-25, decided by Xaver; replaces the two defaults above; reason: the prop firm, Topstep-style, forbids holding through the end of the futures session, not a backtest result): all times in exchange time (America/Chicago), so they follow US daylight saving. **Flat time 15:10 CT:** every open position is closed at the close of the 5-minute bar ending 15:10 CT, Monday to Friday (`flatTime`, was the 16:00 CT halt). **Entry window 17:00-14:00 CT:** new entries only from the 17:00 CT reopen until 14:00 CT (`sessionWindow`, wraps over midnight); no entries 14:00-17:00 CT. In Berlin time that is no entries 21:00-24:00 and flat at 22:10 in normal weeks, one hour earlier in the US/EU daylight-saving mismatch weeks.
 - **Concurrent positions:** unlimited by default. Setting `maxOpenPositions` (default off).
 
 ### 8.3 Sizing and costs
@@ -203,7 +204,8 @@ Trend filters, key-level / potential analysis, opposing zones, news filter, brea
 | `slBufferTicks` | 0 | 1, 2 |
 | `slMode` | wick | zoneBottom, zoneMid |
 | `rr` | 4 | 3, 5, 6 |
-| `sessionWindow` | off | hour windows (selected in-sample, confirmed out-of-sample) |
+| `sessionWindow` | 17:00-14:00 CT (prop firm, amendment 2026-09-25) | hour windows (selected in-sample, confirmed out-of-sample) |
+| `flatTime` | 15:10 CT (prop firm, amendment 2026-09-25) | 16:00 CT = CME halt |
 | `maxOpenPositions` | off | 1, 2 |
 | `maxTradesPerZone` | 1 | — |
 | `sizing` | research (1R exact) | realistic |
