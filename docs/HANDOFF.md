@@ -162,6 +162,18 @@ baseline 6407 T +0.047 (1.91). above_tap_high 3237 T +0.033 (0.99); above_liq 36
 None beats the baseline beyond noise -> all stay off. Note: 3 runs in parallel run out of
 memory (15 GB); run them one after another.
 
+### Stop mode, tap->entry, sweep->tap vs. frozen baseline (2026-09-25)
+
+Net R/trade (t): baseline +0.047 (1.91). sl_mode zone_bottom +0.042 (1.78), zone_mid +0.059
+(2.42); max_bars_tap_to_entry 1: +0.041 (1.58), 6: +0.046 (1.88); max_bars_sweep_to_tap 6:
++0.048 (1.88), 24: +0.044 (1.84). The stop modes keep the same entries, so they were compared
+trade by trade: zone_mid - wick = +0.012 R/T, **t 0.8** (the unpaired t 2.42 overstates it);
+zone_bottom -0.005, t -0.3. Nothing beats the baseline -> all stay at default.
+Useful for costs: gross R hardly depends on stop placement, but the stop size does. Median
+stop wick $0.91, zone_mid $1.06, zone_bottom $1.41; at ~$0.35/oz GC round-trip cost the
+R/trade would be -0.45 (wick), -0.34 (zone_mid), -0.25 (zone_bottom). All still clearly
+negative after costs; wider stops are the only lever seen so far that cuts cost in R.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
