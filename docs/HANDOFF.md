@@ -49,17 +49,20 @@ to `StrategyConfig` (spec amendment, test, code), then check on 2022-2023.
   Stops $2-3: cost 0.11 R. Next candidates: minimum stop size / stop buffer, and checking
   the real cost of GC/MGC futures at the prop firm (the spread placeholder decides a lot).
 
-### Stop size (prepared 2026-09-25 in the cloud, not yet run on data)
+### Stop size result (gold 2015-2021, default config, cloud run 2026-09-25)
 
-    .venv/bin/python scripts/stop_size.py runs/<gold 2015-2021 run folder>
-
-Buckets by stop size in USD (gross, cost, net, t-stat of gross), minimum-stop cap x four
-round-trip cost assumptions ($0.10/0.25/0.35/0.55 per oz), gross R per year. Caveat: MGC is
-likely MORE expensive per ounce than the $0.25 CFD placeholder (~$0.55 incl. 1 tick slippage
-per side); GC ~$0.35. A stop buffer cannot be tested post hoc and needs a rerun.
-The cloud session could not clone `lsd-trader-data` (no GitHub access to it) and histdata.com
-is blocked by the network policy, so data-dependent steps must run locally or in a session
-that has the data repo attached.
+Same run reproduced exactly (6736 trades, -2162.5 R). `scripts/stop_size.py`:
+- A minimum stop does NOT make it profitable under any cost assumption. Best cell: min stop
+  $1.5, cost $0.10/oz -> -0.026 R/trade (N=1766). Gross R is ~0 for every stop >= $0.5.
+- The only significant gross bucket is stops < $0.5 (+0.156 R, t=2.8, N=1392), exactly where
+  costs are 0.83 R, and shorts are better than longs in every small-stop bucket.
+- **Suspected model bias:** stop/target hits are evaluated on BID bars for both sides; the
+  spread is only deducted from P&L. A short's exits are buys at the ASK, so its stop should
+  trigger earlier and its target later than simulated. The bias scales with spread/stop, i.e.
+  it inflates exactly the small-stop gross. Fix before any further filter work: shift the
+  short side's stop/target checks by the spread (and check where the long entry fills).
+- MGC is likely MORE expensive per ounce than the $0.25 CFD placeholder (~$0.55 incl. 1 tick
+  slippage per side); GC ~$0.35. A stop buffer cannot be tested post hoc and needs a rerun.
 
 ## Working rules
 
