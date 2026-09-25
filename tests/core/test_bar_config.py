@@ -24,7 +24,7 @@ def test_config_defaults_match_spec() -> None:
     assert cfg.bos_confirm == "close"
     assert cfg.bos_max_bars is None
     assert cfg.extra_zones == "none"
-    assert cfg.max_bars_sweep_to_tap == 3
+    assert cfg.max_bars_sweep_to_tap == 12  # one hour of 5-minute bars
     assert cfg.tap_tol_ticks == 0
     assert cfg.max_bars_tap_to_entry == 3
     assert cfg.sl_buffer_ticks == 0

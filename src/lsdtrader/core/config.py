@@ -18,7 +18,7 @@ class StrategyConfig:
     zone_kill: Literal["close_inside", "close_beyond"] = "close_inside"
     liq_max_dist_atr: float | None = None
     atr_len: int = 14
-    max_bars_sweep_to_tap: int = 3
+    max_bars_sweep_to_tap: int = 12  # one hour of 5-minute bars (Spec §7)
     tap_tol_ticks: int = 0
     max_bars_tap_to_entry: int = 3
     entry_trigger: Literal["bullish", "above_tap_high", "above_liq", "min_body"] = "bullish"

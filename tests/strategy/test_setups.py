@@ -54,7 +54,8 @@ def test_touching_top_is_a_tap_stopping_short_is_not() -> None:
     # Scenario 12
     assert run([(112, 117, 111, 115)])[0]  # touches 111
     entries, log, _ = run(
-        [(116, 117, 112, 115), (115, 116, 112, 114), (114, 115, 112, 113), (113, 114, 112, 113)]
+        [(116, 117, 112, 115), (115, 116, 112, 114), (114, 115, 112, 113), (113, 114, 112, 113)],
+        StrategyConfig(max_bars_sweep_to_tap=3),
     )
     assert entries == [] and "no_tap" in log.kinds()
 
@@ -142,3 +143,13 @@ def test_second_liquidity_for_a_running_setup_leaves_an_event() -> None:
     tracker.start(z, Liquidity(0, 0, 113, 0), 1, None)
     tracker.start(z, Liquidity(1, 0, 115, 0), 1, None)
     assert "setup_already_running" in log.kinds()
+
+
+def test_zone_can_be_tapped_up_to_one_hour_after_the_sweep() -> None:
+    # 2025-01-03 example: the tap came 6 bars after the sweep and must now count.
+    waiting = [(116, 117, 112, 115)] * 6  # no tap for six bars after the sweep bar
+    entries, log, _ = run([(116, 117, 112, 115), *waiting, (113, 116, 110, 115)])
+    (e,) = entries
+    assert (e.sweep_idx, e.tap_idx) == (1, 8)
+    no_tap, _, _ = run([(116, 117, 112, 115)] * 14)  # 13 bars after the sweep: too late
+    assert no_tap == []
