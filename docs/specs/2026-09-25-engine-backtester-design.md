@@ -164,3 +164,15 @@ Tooling: `pytest` with coverage, `ruff` (lint + format), `mypy` on `src/`, GitHu
 | Roll logic creates false structure | roll schedule in data report; synthetic roll tests; visual check around roll dates |
 | Owner cannot follow the code | small modules, docstrings referencing spec sections, walkthrough after each module |
 | First backtest numbers tempt rule changes | no verdict in sub-project 2; pre-registration happens in sub-project 3 before results are read |
+
+## 12. Amendment 2026-09-25 — data sources
+
+Databento could not be used: the only available card was rejected at signup before it reached the card issuer (support request pending). FirstRate Data (≈190 EUR per instrument) and Kibot (≥ 400 USD) exceed the 50 EUR budget. Dukascopy's free web export delivers one day per 1-minute file and its HTTP feed blocks scripted access; mass-automating either is not done.
+
+Decision (Xaver, 2026-09-25):
+
+- **Primary source for building and first tests: HistData.com free 1-minute CFD data** (SPX/USD, NSX/USD, XAU/USD, XAG/USD, WTI/USD; bid only, no volume; timestamps EST without DST, converted to UTC). Downloaded so far: SPX/USD 2020–2025.
+- **Dukascopy CSV exports** are supported as a second CFD source (manual, small samples).
+- **Futures data** (Databento or a prop-firm Rithmic feed) stays planned as a second source; §4.1–4.2 (fetch, roll, Panama adjustment) move to that later plan. CFDs have no contract roll.
+- **CFD cost model:** a fixed spread per instrument, paid once per trade on entry (bars are bid prices); commission 0, slippage 0. Values are placeholders until measured (Dukascopy exports bid and ask, so the spread can be measured there).
+- The CFD-vs-futures comparison (same rules, 1–2 tick differences) is kept as a research question for sub-project 3.
