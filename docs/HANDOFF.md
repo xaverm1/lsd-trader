@@ -49,6 +49,18 @@ to `StrategyConfig` (spec amendment, test, code), then check on 2022-2023.
   Stops $2-3: cost 0.11 R. Next candidates: minimum stop size / stop buffer, and checking
   the real cost of GC/MGC futures at the prop firm (the spread placeholder decides a lot).
 
+### Stop size (prepared 2026-09-25 in the cloud, not yet run on data)
+
+    .venv/bin/python scripts/stop_size.py runs/<gold 2015-2021 run folder>
+
+Buckets by stop size in USD (gross, cost, net, t-stat of gross), minimum-stop cap x four
+round-trip cost assumptions ($0.10/0.25/0.35/0.55 per oz), gross R per year. Caveat: MGC is
+likely MORE expensive per ounce than the $0.25 CFD placeholder (~$0.55 incl. 1 tick slippage
+per side); GC ~$0.35. A stop buffer cannot be tested post hoc and needs a rerun.
+The cloud session could not clone `lsd-trader-data` (no GitHub access to it) and histdata.com
+is blocked by the network policy, so data-dependent steps must run locally or in a session
+that has the data repo attached.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
