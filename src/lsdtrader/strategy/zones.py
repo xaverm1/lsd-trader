@@ -54,6 +54,9 @@ class ZoneBook:
         self._log = log
         self._zones: list[Zone] = []
         self._next_id = 0
+        # Every bar any zone has ever used as origin. A zone starting on such a bar would
+        # replay into an exact copy of the earlier zone (same bars, same rules).
+        self._origins: set[int] = set()
 
     def live(self) -> list[Zone]:
         return [z for z in self._zones if z.live]
@@ -61,7 +64,8 @@ class ZoneBook:
     def create(self, bars: Sequence[TickBar], bos: Bos) -> list[Zone]:
         """Create the zone(s) for a BOS and replay them up to the newest bar."""
         o = find_origin(bars, bos.p_idx, self._cfg.zone_lookback, self._cfg.doji_tol_ticks)
-        created = [self._new(bars, o, bos)]
+        zone = self._new(bars, o, bos)
+        created = [zone] if zone is not None else []
         if self._cfg.extra_zones != "none":
             created += self._extra(bars, bos, created)
         return created
@@ -81,7 +85,11 @@ class ZoneBook:
 
     # -- internals ---------------------------------------------------------
 
-    def _new(self, bars: Sequence[TickBar], o: int, bos: Bos) -> Zone:
+    def _new(self, bars: Sequence[TickBar], o: int, bos: Bos) -> Zone | None:
+        if o in self._origins:
+            self._log.emit("zone_duplicate", o_idx=o, p_idx=bos.p_idx)
+            return None
+        self._origins.add(o)
         ob = bars[o]
         zone = Zone(self._next_id, o, ob.high, ob.low, bos.p_idx, len(bars) - 1)
         self._next_id += 1
@@ -103,7 +111,9 @@ class ZoneBook:
         for k in ks:
             if any(z.overlaps(bars[k]) or z.o_idx == k for z in created + extra):
                 continue
-            extra.append(self._new(bars, k, bos))
+            zone = self._new(bars, k, bos)
+            if zone is not None:
+                extra.append(zone)
             if self._cfg.extra_zones == "last":
                 break
         return extra
@@ -118,6 +128,7 @@ class ZoneBook:
         bar = bars[k]
         if is_opposing(bar, self._cfg.doji_tol_ticks) and z.overlaps(bar):
             z.o_idx, z.top, z.bot = k, bar.high, bar.low
+            self._origins.add(k)
             z.kind, z.pending = "normal", True
             self._log.emit("zone_relocation", zone_id=z.zone_id, o_idx=k)
         elif z.pending:

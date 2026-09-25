@@ -131,3 +131,14 @@ def test_stop_modes_and_buffer() -> None:
 def test_target_uses_rr_and_rounds_away_from_entry() -> None:
     (e,) = run([(112, 117, 110, 115)], StrategyConfig(rr=2.5))[0]
     assert e.target == 115 + 13  # ceil(2.5 * 5)
+
+
+def test_second_liquidity_for_a_running_setup_leaves_an_event() -> None:
+    # Review finding: every rejected object must leave an event.
+    cfg = StrategyConfig()
+    log = EventLog()
+    tracker = SetupTracker(cfg, log, ZoneBook(cfg, log))
+    z = Zone(zone_id=7, o_idx=0, top=111, bot=106, p_idx=0, created_idx=0, state="left")
+    tracker.start(z, Liquidity(0, 0, 113, 0), 1, None)
+    tracker.start(z, Liquidity(1, 0, 115, 0), 1, None)
+    assert "setup_already_running" in log.kinds()

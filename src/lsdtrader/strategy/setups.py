@@ -56,6 +56,7 @@ class SetupTracker:
     def start(self, zone: Zone, liq: Liquidity, sweep_idx: int, atr: float | None) -> Setup | None:
         """Start a setup unless the zone already has one running."""
         if any(s.zone is zone for s in self._pending):
+            self._log.emit("setup_already_running", zone_id=zone.zone_id, liq_idx=liq.idx)
             return None
         setup = Setup(self._next_id, zone, liq, sweep_idx, atr)
         self._next_id += 1

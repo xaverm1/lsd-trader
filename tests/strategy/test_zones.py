@@ -147,3 +147,35 @@ def test_extra_zones(mode: str, origins: list[int]) -> None:
 def test_origin_search_respects_lookback() -> None:
     bars = make_bars((100, 101, 94, 95), (95, 97, 90, 96), (96, 99, 95, 98))
     assert find_origin(bars, p_idx=1, lookback=1, doji_tol_ticks=0) == 1
+
+
+def test_second_bos_with_same_origin_creates_no_duplicate_zone() -> None:
+    # Review finding: two BOS events whose origin search lands on the same bar must not
+    # create two zones (each would trade -> one zone counted twice).
+    bars = make_bars(O_BAR, (104, 114, 103, 113), (113, 120, 113, 119))
+    log = EventLog()
+    book = ZoneBook(StrategyConfig(), log)
+    first = book.create(bars, bos_at(0, 2))
+    second = book.create(bars, bos_at(1, 2))  # P = bar 1 is bullish -> origin search finds bar 0
+    assert [z.o_idx for z in first] == [0]
+    assert second == []
+    assert "zone_duplicate" in log.kinds()
+
+
+def test_consumed_zone_is_not_recreated_by_a_later_bos() -> None:
+    bars = make_bars(O_BAR, (104, 114, 103, 113), (113, 120, 113, 119))
+    log = EventLog()
+    book = ZoneBook(StrategyConfig(), log)
+    (zone,) = book.create(bars, bos_at(0, 2))
+    book.consume(zone)
+    book.update(bars)
+    assert book.create(bars, bos_at(1, 2)) == []
+
+
+def test_bos_whose_origin_is_a_relocation_target_creates_no_duplicate() -> None:
+    bars = make_bars(O_BAR, (104, 106, 98, 99), (99, 120, 99, 119))
+    log = EventLog()
+    book = ZoneBook(StrategyConfig(), log)
+    (zone,) = book.create(bars, bos_at(0, 2))
+    assert zone.o_idx == 1  # relocated onto bar 1
+    assert book.create(bars, bos_at(1, 2)) == []
