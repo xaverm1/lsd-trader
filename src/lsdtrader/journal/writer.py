@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -80,7 +80,9 @@ def event_rows(result: RunResult) -> list[dict[str, Any]]:
     ]
 
 
-def build_meta(result: RunResult, data_files: Sequence[Path]) -> dict[str, Any]:
+def build_meta(
+    result: RunResult, data_files: Sequence[Path], notes: Mapping[str, str] | None = None
+) -> dict[str, Any]:
     inst = asdict(result.instrument)
     inst["tick_size"] = str(inst["tick_size"])
     return {
@@ -92,11 +94,18 @@ def build_meta(result: RunResult, data_files: Sequence[Path]) -> dict[str, Any]:
         "data": [{"path": str(p), "sha256": sha256_file(p)} for p in data_files],
         "n_bars": result.n_bars,
         "n_trades": len(result.trades),
+        "notes": dict(notes or {}),
     }
 
 
-def write_run(result: RunResult, out_dir: Path, data_files: Sequence[Path] = ()) -> Path:
-    meta = build_meta(result, data_files)
+def write_run(
+    result: RunResult,
+    out_dir: Path,
+    data_files: Sequence[Path] = (),
+    notes: Mapping[str, str] | None = None,
+) -> Path:
+    """`notes` (e.g. data source, exit resolution) go into meta.json and summary.md."""
+    meta = build_meta(result, data_files, notes)
     fingerprint = hashlib.sha256(json.dumps(meta, sort_keys=True, default=str).encode()).hexdigest()
     now = datetime.now(UTC)
     folder = out_dir / f"{now:%Y%m%d-%H%M%S}_{result.instrument.root}_{fingerprint[:8]}"
@@ -108,5 +117,7 @@ def write_run(result: RunResult, out_dir: Path, data_files: Sequence[Path] = ())
     pq.write_table(pa.Table.from_pylist(event_rows(result)), folder / "events.parquet")
     title = f"Backtest {result.instrument.root}"
     summary = render_markdown(title, summarize(result.trades), result.n_bars, result.events)
+    if notes:
+        summary += "\n## Notes\n\n" + "".join(f"- {k}: {v}\n" for k, v in notes.items())
     (folder / "summary.md").write_text(summary, encoding="utf-8")
     return folder
