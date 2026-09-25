@@ -174,6 +174,25 @@ stop wick $0.91, zone_mid $1.06, zone_bottom $1.41; at ~$0.35/oz GC round-trip c
 R/trade would be -0.45 (wick), -0.34 (zone_mid), -0.25 (zone_bottom). All still clearly
 negative after costs; wider stops are the only lever seen so far that cuts cost in R.
 
+### RD-TREE v3 trend / potential candidates (2026-09-25)
+
+From the Obsidian vault (Google Drive, folder Playbook): the live rule is RD-TREE v3 - count
+what is against (external trend, internal trend, potential, zone arguments), 0-1 -> take,
+target 1:6. Xaver: no 08-17 window and no 2-per-session cap in the backtest (psychological).
+Every trade now carries candidates (`strategy/context.py`): structure trend from swings of
+1/2/5/10/20 bars, HH/HL over 4 h / 12 h, distance in R to the nearest untouched swing high
+(5/10/20); `scripts/rd_tree.py`, `scripts/ma_trend.py` (EMA candidates, post hoc).
+Explored on 2017, confirmed on 2015-16 + 2018-21 (gross, TP 6 R):
+- 135 counter combinations on 2017: best +0.43 R/T (N 86, t 1.5) = chance level; it fell to
+  +0.080 on the other years. Trend on swings of 5 or 12 h HH/HL: "against" better than "with".
+- Internal trend measured at the entry bar is almost always against (swing 1: 93 of 891
+  "with"): at entry price has just swept back into the zone. The vault's internal trend
+  probably means another moment (open question to Xaver).
+- The only consistent effect: trend on swings of 10 bars "with" the trade. 2015-2021 with
+  +0.116 R/T (N 2490) vs against +0.030 (N 3892), difference t 1.4; better in 6 of 7 years
+  (not 2020). EMA 240 (~1 h EMA 20) shows the same tilt (other years with +0.112, against
+  +0.034). Small and not significant; even +0.12 R/T gross is far below ~0.4 R GC costs.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
