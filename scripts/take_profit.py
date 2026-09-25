@@ -34,8 +34,13 @@ def result(t: dict, x: float) -> float:
 
 
 print(f"{run}: {len(trades)} trades, gross R (no costs)\n")
-print("Without take profit, trades end by:",
-      {k: sum(t["exit_free_reason"] == k for t in trades) for k in ("sl", "flat_break", "end_of_data")})
+print(
+    "Without take profit, trades end by:",
+    {
+        k: sum(t["exit_free_reason"] == k for t in trades)
+        for k in ("sl", "flat_break", "end_of_data")
+    },
+)
 
 print("\n## Target level (gross R per trade)\n")
 print("| TP (R) | Win % | R/Trade | Sum R | t | Long R/T | Short R/T |")
@@ -45,9 +50,13 @@ for x in levels:
     rs = [result(t, x) if x else t["exit_free_r"] for t in trades]
     n, m, s, tt = stats(rs)
     win = sum(r > 0 for r in rs) / n
-    side = {sd: stats([r for r, t in zip(rs, trades) if t["side"] == sd])[1] for sd in ("long", "short")}
+    side = {
+        sd: stats([r for r, t in zip(rs, trades) if t["side"] == sd])[1] for sd in ("long", "short")
+    }
     label = f"{x:g}" if x else "none"
-    print(f"| {label} | {win:.1%} | {m:+.3f} | {s:+.0f} | {tt:+.2f} | {side['long']:+.3f} | {side['short']:+.3f} |")
+    print(
+        f"| {label} | {win:.1%} | {m:+.3f} | {s:+.0f} | {tt:+.2f} | {side['long']:+.3f} | {side['short']:+.3f} |"
+    )
 
 print("\n## How far did price run? Share of trades with run-up >= k R (no take profit)\n")
 groups = {
