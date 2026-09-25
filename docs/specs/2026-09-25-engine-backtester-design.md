@@ -176,3 +176,8 @@ Decision (Xaver, 2026-09-25):
 - **Futures data** (Databento or a prop-firm Rithmic feed) stays planned as a second source; §4.1–4.2 (fetch, roll, Panama adjustment) move to that later plan. CFDs have no contract roll.
 - **CFD cost model:** a fixed spread per instrument, paid once per trade on entry (bars are bid prices); commission 0, slippage 0. Values are placeholders until measured (Dukascopy exports bid and ask, so the spread can be measured there).
 - The CFD-vs-futures comparison (same rules, 1–2 tick differences) is kept as a research question for sub-project 3.
+
+## 13. Acceptance log
+
+- **2026-09-25 — §10.4 visual review: accepted by Xaver.** Run `20260925-135322_SPXUSD_53867d92` (SPXUSD 2025, HistData, default config, 792 trades): 10 random trades and 10 near-miss rejections (`lsd review`, seed 1) plus the full interactive chart of all trades (`lsd chart`). Verdict: "scheint alles zu passen". During the review cycle one engine bug was found and fixed (duplicate zones via relocation, 75 duplicate trades).
+- §10.5 golden set: open — waits for Xaver's extended list.
