@@ -193,6 +193,12 @@ Explored on 2017, confirmed on 2015-16 + 2018-21 (gross, TP 6 R):
   (not 2020). EMA 240 (~1 h EMA 20) shows the same tilt (other years with +0.112, against
   +0.034). Small and not significant; even +0.12 R/T gross is far below ~0.4 R GC costs.
 
+Internal trend on bigger swings (Xaver: pivots higher, decoupled from the BOS), pairs fixed
+before looking: ext10/int5, ext20/int5, ext20/int10, 2015-2021, TP 6: "both with" is not
+better than "one against" (ext10/int5 +0.092 vs +0.110; ext20/int10 +0.070 vs +0.120). The
+counter (<= 1 against) gains only by dropping "both against" (~+0.03 R/T): about +0.10 vs
++0.03, the same as external trend alone. Internal trend adds nothing on top.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
