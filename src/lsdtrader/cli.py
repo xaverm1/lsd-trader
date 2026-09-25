@@ -3,6 +3,7 @@
     lsd backtest FILE... [--instrument ROOT] [--set name=value ...]
     lsd data-report FILE... [--instrument ROOT] [--out report.md]
     lsd review RUN_FOLDER [--n 10] [--seed 1]
+    lsd chart RUN_FOLDER [--out chart.html]
     lsd inspect-at FILE... --at "YYYY-MM-DD HH:MM" [--instrument ROOT] [--out chart.png]
 
 FILE is a TradingView JSON export (5-minute bars) or one or more 1-minute files
@@ -25,8 +26,9 @@ from lsdtrader.execution.broker import ExecutionConfig
 from lsdtrader.journal.summary import summarize
 from lsdtrader.journal.writer import write_run
 from lsdtrader.review.inspect_at import inspect_at
-from lsdtrader.review.review import build_review
+from lsdtrader.review.review import build_review, load_run
 from lsdtrader.viz.chart import BERLIN, render
+from lsdtrader.viz.interactive import write_interactive_chart
 
 
 def parse_value(text: str) -> object:
@@ -91,6 +93,12 @@ def cmd_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_chart(args: argparse.Namespace) -> int:
+    page = write_interactive_chart(load_run(args.run), args.out)
+    print(f"interactive chart: {page}")
+    return 0
+
+
 def parse_at(text: str) -> datetime:
     """Berlin time unless the text carries its own offset (charts are in Berlin time too)."""
     ts = datetime.fromisoformat(text)
@@ -137,6 +145,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     rv.add_argument("--n", type=int, default=10)
     rv.add_argument("--seed", type=int, default=1)
     rv.set_defaults(func=cmd_review)
+
+    ch = sub.add_parser("chart", help="interactive chart with every trade of a run")
+    ch.add_argument("run", type=Path, help="run folder written by lsd backtest")
+    ch.add_argument("--out", type=Path, help="default: chart.html in the run folder")
+    ch.set_defaults(func=cmd_chart)
 
     ia = sub.add_parser("inspect-at", help="strategy state at one moment (why no setup?)")
     ia.add_argument("files", type=Path, nargs="+")

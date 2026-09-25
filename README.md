@@ -50,11 +50,14 @@ strategy; that needs the out-of-sample methodology of sub-project 3.
 ## Checking the engine by eye
 
 ```bash
+lsd chart runs/<run-folder>
 lsd review runs/<run-folder> --n 10 --seed 1
 lsd inspect-at data/histdata/HISTDATA_COM_ASCII_SPXUSD_M1_2025.zip --at "2025-02-27 09:05"
 ```
 
-`review` draws random trades and rejected near-miss setups of a run (seed recorded) and
+`chart` writes `chart.html` into the run folder: every trade on one scrollable, zoomable
+candlestick chart (TradingView Lightweight Charts, embedded, works offline) with a clickable
+trade list. `review` draws random trades and rejected near-miss setups of a run (seed recorded) and
 writes charts plus an `index.html` to look through. Chart times and `--at` are Europe/Berlin. `inspect-at` replays the strategy up to a
 moment and charts every zone and open liquidity in view, with the rule events that led there
 (also saved as a `.txt`) — the answer to "why was there no setup here?".
