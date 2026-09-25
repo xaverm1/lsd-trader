@@ -26,7 +26,7 @@ from lsdtrader.journal.summary import summarize
 from lsdtrader.journal.writer import write_run
 from lsdtrader.review.inspect_at import inspect_at
 from lsdtrader.review.review import build_review
-from lsdtrader.viz.chart import render
+from lsdtrader.viz.chart import BERLIN, render
 
 
 def parse_value(text: str) -> object:
@@ -91,20 +91,25 @@ def cmd_review(args: argparse.Namespace) -> int:
     return 0
 
 
-def parse_utc(text: str) -> datetime:
-    return datetime.fromisoformat(text).replace(tzinfo=UTC)
+def parse_at(text: str) -> datetime:
+    """Berlin time unless the text carries its own offset (charts are in Berlin time too)."""
+    ts = datetime.fromisoformat(text)
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=BERLIN)
+    return ts.astimezone(UTC)
 
 
 def cmd_inspect_at(args: argparse.Namespace) -> int:
     cfg = StrategyConfig(**parse_overrides(args.set))  # type: ignore[arg-type]
     data = load_data(args.files, args.instrument)
-    spec, lines = inspect_at(data.bars, parse_utc(args.at), cfg, args.before)
-    out = args.out or Path(f"inspect_{data.instrument.root}_{args.at.replace(':', '')}.png")
+    spec, lines = inspect_at(data.bars, parse_at(args.at), cfg, args.before)
+    stamp = args.at.replace(":", "").replace(" ", "_")
+    out = args.out or Path(f"inspect_{data.instrument.root}_{stamp}.png")
     render(spec, data.bars, data.instrument, out)
     events_file = out.with_suffix(".txt")
     events_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
-    print(f"chart: {out}\nevents: {events_file}")
+    print(f"{spec.title}\nchart: {out}\nevents: {events_file}")
     return 0
 
 
@@ -135,7 +140,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     ia = sub.add_parser("inspect-at", help="strategy state at one moment (why no setup?)")
     ia.add_argument("files", type=Path, nargs="+")
-    ia.add_argument("--at", required=True, help='UTC time, e.g. "2025-03-12 15:35"')
+    ia.add_argument("--at", required=True, help='Berlin time, e.g. "2025-03-12 16:35"')
     ia.add_argument("--instrument")
     ia.add_argument("--set", action="append", default=[], metavar="NAME=VALUE")
     ia.add_argument("--before", type=int, default=120, help="bars shown before --at")

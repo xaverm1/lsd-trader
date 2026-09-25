@@ -13,7 +13,7 @@ from datetime import datetime
 from lsdtrader.core.bar import TickBar
 from lsdtrader.core.config import StrategyConfig
 from lsdtrader.strategy.lsd import LsdStrategy, SideEngine
-from lsdtrader.viz.chart import Box, ChartSpec, Level
+from lsdtrader.viz.chart import Box, ChartSpec, Level, berlin_label
 
 LIVE, ENDED = "#534AB7", "#888780"
 CHART_EVENT_LINES = 8  # the full list goes to stdout / the .txt file
@@ -62,7 +62,7 @@ def inspect_at(
         strategy.on_bar(bar)
     events = [e for e in strategy.drain_events() if first <= e.bar_index <= idx]
     lines = [
-        f"{times[e.bar_index]:%m-%d %H:%M} {e.side:<5} {e.kind:<22} "
+        f"{berlin_label(times[e.bar_index])} {e.side:<5} {e.kind:<22} "
         + " ".join(f"{k}={v}" for k, v in sorted(e.detail.items()))
         for e in events
     ]
@@ -87,9 +87,11 @@ def inspect_at(
     spec = ChartSpec(
         first=first,
         last=last,
-        title=f"State at {times[idx]:%Y-%m-%d %H:%M} UTC (bar {idx}); bars after it are not used",
+        title=f"State at {berlin_label(times[idx])} Berlin (bar {idx}); bars right of the line"
+        " are not used",
         boxes=boxes,
-        levels=[*levels, Level(idx, idx, bars[idx].close, "#444441", "now", "-")],
+        levels=levels,
+        vline=idx,
         notes=chart_lines[-CHART_EVENT_LINES:],
     )
     return spec, lines
