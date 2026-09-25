@@ -1,0 +1,159 @@
+"""M5 · Sweep → tap → entry, plus stop and target (Strategy Spec §7, §8.1)."""
+
+from __future__ import annotations
+
+import math
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+
+from lsdtrader.core.bar import TickBar
+from lsdtrader.core.config import StrategyConfig
+from lsdtrader.core.events import EventLog
+from lsdtrader.strategy.liquidity import Liquidity
+from lsdtrader.strategy.zones import Zone, ZoneBook
+
+
+@dataclass(slots=True)
+class Setup:
+    setup_id: int
+    zone: Zone
+    liq: Liquidity
+    sweep_idx: int
+    atr: float | None
+    tap_idx: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Entry:
+    setup_id: int
+    entry_idx: int
+    entry: int
+    stop: int
+    target: int
+    zone_id: int
+    zone_top: int
+    zone_bot: int
+    zone_o_idx: int
+    liq_idx: int
+    liq_price: int
+    sweep_idx: int
+    tap_idx: int
+    features: dict[str, object] = field(default_factory=dict)
+
+
+class SetupTracker:
+    def __init__(self, cfg: StrategyConfig, log: EventLog, zones: ZoneBook) -> None:
+        self._cfg = cfg
+        self._log = log
+        self._zones = zones
+        self._pending: list[Setup] = []
+        self._next_id = 0
+
+    @property
+    def pending(self) -> list[Setup]:
+        return list(self._pending)
+
+    def start(self, zone: Zone, liq: Liquidity, sweep_idx: int, atr: float | None) -> Setup | None:
+        """Start a setup unless the zone already has one running."""
+        if any(s.zone is zone for s in self._pending):
+            return None
+        setup = Setup(self._next_id, zone, liq, sweep_idx, atr)
+        self._next_id += 1
+        self._pending.append(setup)
+        self._log.emit(
+            "setup_started", setup_id=setup.setup_id, zone_id=zone.zone_id, liq_idx=liq.idx
+        )
+        return setup
+
+    def update(self, bars: Sequence[TickBar]) -> list[Entry]:
+        """Advance pending setups by the newest bar (zones must already be updated)."""
+        i = len(bars) - 1
+        entries: list[Entry] = []
+        keep: list[Setup] = []
+        for s in self._pending:
+            result = self._advance(bars, s, i)
+            if isinstance(result, Entry):
+                entries.append(result)
+            elif result:
+                keep.append(s)
+        self._pending = keep
+        return entries
+
+    def _advance(self, bars: Sequence[TickBar], s: Setup, i: int) -> Entry | bool:
+        """Returns an Entry, True to keep waiting, or False to drop the setup."""
+        cfg, bar, z = self._cfg, bars[i], s.zone
+        if z.state != "left":
+            self._log.emit("setup_zone_gone", setup_id=s.setup_id, zone_state=z.state)
+            return False
+        if s.tap_idx is None:
+            if bar.low <= z.top + cfg.tap_tol_ticks:
+                s.tap_idx = i
+                self._log.emit("tap", setup_id=s.setup_id)
+            elif i - s.sweep_idx >= cfg.max_bars_sweep_to_tap:
+                self._log.emit("no_tap", setup_id=s.setup_id)
+                return False
+            else:
+                return True
+        if self._triggered(bars, s, i):
+            return self._enter(bars, s, i)
+        if i - s.tap_idx >= cfg.max_bars_tap_to_entry:
+            self._log.emit("no_entry", setup_id=s.setup_id)
+            return False
+        return True
+
+    def _triggered(self, bars: Sequence[TickBar], s: Setup, i: int) -> bool:
+        bar = bars[i]
+        if bar.close <= bar.open:
+            return False
+        trigger = self._cfg.entry_trigger
+        if trigger == "above_tap_high":
+            assert s.tap_idx is not None
+            return bar.close > bars[s.tap_idx].high
+        if trigger == "above_liq":
+            return bar.close > s.liq.price
+        if trigger == "min_body":
+            return bar.close - bar.open >= self._cfg.min_body_ticks
+        return True
+
+    def _enter(self, bars: Sequence[TickBar], s: Setup, i: int) -> Entry:
+        cfg, z = self._cfg, s.zone
+        assert s.tap_idx is not None
+        entry = bars[i].close
+        if cfg.sl_mode == "zone_bottom":
+            stop = z.bot
+        elif cfg.sl_mode == "zone_mid":
+            stop = (z.top + z.bot) // 2
+        else:
+            stop = min(b.low for b in bars[s.sweep_idx : i + 1])
+        stop -= cfg.sl_buffer_ticks
+        risk = entry - stop
+        target = entry + math.ceil(cfg.rr * risk)
+        dist = s.liq.price - z.top
+        features: dict[str, object] = {
+            "zone_height_ticks": z.top - z.bot,
+            "zone_kind": z.kind,
+            "liq_dist_ticks": dist,
+            "liq_dist_atr": dist / s.atr if s.atr else None,
+            "bars_sweep_to_tap": s.tap_idx - s.sweep_idx,
+            "bars_tap_to_entry": i - s.tap_idx,
+            "stop_ticks": risk,
+        }
+        result = Entry(
+            s.setup_id,
+            i,
+            entry,
+            stop,
+            target,
+            z.zone_id,
+            z.top,
+            z.bot,
+            z.o_idx,
+            s.liq.idx,
+            s.liq.price,
+            s.sweep_idx,
+            s.tap_idx,
+            features,
+        )
+        self._zones.consume(z)
+        self._log.emit("entry", setup_id=s.setup_id, zone_id=z.zone_id)
+        return result
