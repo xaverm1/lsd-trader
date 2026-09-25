@@ -151,6 +151,17 @@ young bucket is better than the old one in 3 of 7 years (2018, 2019, 2021), and 
 it was the only positive bucket. About 20 cuts looked at -> not a finding, no filter. At most a
 pre-registered hypothesis "min zone age > 12 bars" for 2022-2023.
 
+### Entry trigger and liquidity distance vs. frozen baseline (2026-09-25)
+
+`scripts/compare_runs.py BASELINE VARIANTS...`; gold 2015-2021, no costs, net R/trade (t):
+baseline 6407 T +0.047 (1.91). above_tap_high 3237 T +0.033 (0.99); above_liq 3634 T +0.052
+(1.62); min_body (body >= $0.30 = median bullish 5-min body, fixed before the run) 4731 T
++0.020 (0.71); liq_max_dist_atr 0.5: 3414 T +0.039 (1.17), 1: 5039 T +0.054 (1.96),
+2: 6148 T +0.053 (2.13). Trades a variant removes are about as good as the ones it keeps
+(liq 1 removed +0.025, above_liq removed +0.029; liq 2 removed 467 T at -0.068, t -0.8).
+None beats the baseline beyond noise -> all stay off. Note: 3 runs in parallel run out of
+memory (15 GB); run them one after another.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
