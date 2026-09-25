@@ -199,6 +199,27 @@ better than "one against" (ext10/int5 +0.092 vs +0.110; ext20/int10 +0.070 vs +0
 counter (<= 1 against) gains only by dropping "both against" (~+0.03 R/T): about +0.10 vs
 +0.03, the same as external trend alone. Internal trend adds nothing on top.
 
+### Same logic on longer bars, holding overnight (2026-09-25)
+
+`lsd backtest --timeframe 15|30|60|240 --hold-overnight` (bars from the 1-minute files, UTC
+grid; strategy parameters stay in bars; no flat time, no entry window). Gold 2015-2021,
+`scripts/timeframes.py`, cost $0.35/oz (GC):
+
+| Bars | Trades/yr | Median stop | Cost R | TP4 gross (t) | TP4 net | TP6 gross (t) | TP6 net |
+|---|---|---|---|---|---|---|---|
+| 5m | 966 | $0.90 | 0.51 | +0.039 (1.6) | -0.47 | +0.035 (1.1) | -0.47 |
+| 15m | 325 | $1.65 | 0.27 | +0.077 (1.8) | -0.19 | +0.059 (1.1) | -0.21 |
+| 30m | 166 | $2.43 | 0.18 | +0.052 (0.9) | -0.13 | +0.118 (1.6) | -0.06 |
+| 60m | 83 | $3.59 | 0.12 | +0.019 (0.2) | -0.10 | +0.040 (0.4) | -0.08 |
+| 4h | 26 | $5.87 | 0.07 | -0.139 (-1.0) | -0.21 | -0.020 (-0.1) | -0.09 |
+
+Costs fall with the bar length, but the gross edge does not grow: every row is negative after
+costs. Stops grow much less than the bars (4h: 6.5x the 5m stop, bars 48x) because the stop
+sits at the sweep/tap wick. 30m TP6 is best (-0.06 net) but carried by 2015-2017 (+0.35 to
++0.45 R/T), negative from 2018. The external-trend filter (swings of 10 bars) does not help
+on any of these bar lengths. On 5m, holding overnight is slightly worse than the 15:10 CT
+flat (+0.039 vs +0.047 R/T gross).
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
