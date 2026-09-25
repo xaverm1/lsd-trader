@@ -39,6 +39,16 @@ position limit). Exploratory SPX 2025 result: only zones <= 1 h (12 bars) old we
 (+0.22 R gross, N=135, not significant). If gold 2015-2021 confirms, add `max_zone_age_bars`
 to `StrategyConfig` (spec amendment, test, code), then check on 2022-2023.
 
+### First gold result (2015-2021, default config, run done locally 2026-09-25)
+
+6736 trades, win rate 23.6 %, gross +0.04 R/trade, **net -0.32 R/trade (-2162 R)**.
+- Zone age does NOT help on gold: <= 1 h is the worst bucket (gross -0.07 R, N=910);
+  the SPX finding did not replicate. No age filter so far.
+- **Costs are the real problem:** median stop is only $0.90 while the assumed CFD spread is
+  $0.25, so costs are 0.36 R/trade. Stops under $1 (N=3709): gross +0.07, cost 0.53 R.
+  Stops $2-3: cost 0.11 R. Next candidates: minimum stop size / stop buffer, and checking
+  the real cost of GC/MGC futures at the prop firm (the spread placeholder decides a lot).
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
