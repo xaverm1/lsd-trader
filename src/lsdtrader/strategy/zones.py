@@ -26,6 +26,7 @@ class Zone:
     pending: bool = True  # geometry waits for the follow-up bar F
     state: ZoneState = "building"
     trades: int = 0
+    ended_idx: int | None = None  # bar on which the zone stopped being live
 
     @property
     def live(self) -> bool:
@@ -57,6 +58,9 @@ class ZoneBook:
         # Every bar any zone has ever used as origin. A zone starting on such a bar would
         # replay into an exact copy of the earlier zone (same bars, same rules).
         self._origins: set[int] = set()
+        # Every zone ever created, kept for inspection (charts, "why no setup here?").
+        self.history: list[Zone] = []
+        self._current = -1
 
     def live(self) -> list[Zone]:
         return [z for z in self._zones if z.live]
@@ -73,17 +77,25 @@ class ZoneBook:
     def update(self, bars: Sequence[TickBar]) -> None:
         """Advance every live zone by the newest bar, then drop finished zones."""
         k = len(bars) - 1
+        self._current = k
         for z in self._zones:
             if z.live:
                 self._step(bars, z, k)
+                self._mark_end(z, k)
         self._zones = [z for z in self._zones if z.live]
 
     def consume(self, zone: Zone) -> None:
         zone.trades += 1
         if zone.trades >= self._cfg.max_trades_per_zone:
             zone.state = "consumed"
+            self._mark_end(zone, self._current)
 
     # -- internals ---------------------------------------------------------
+
+    @staticmethod
+    def _mark_end(z: Zone, k: int) -> None:
+        if not z.live and z.ended_idx is None:
+            z.ended_idx = k
 
     def _new(self, bars: Sequence[TickBar], o: int, bos: Bos) -> Zone | None:
         if o in self._origins:
@@ -98,7 +110,9 @@ class ZoneBook:
             if not zone.live:
                 break
             self._step(bars, zone, k)
+            self._mark_end(zone, k)
         self._zones.append(zone)
+        self.history.append(zone)
         return zone
 
     def _extra(self, bars: Sequence[TickBar], bos: Bos, created: list[Zone]) -> list[Zone]:

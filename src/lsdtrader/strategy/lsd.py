@@ -41,6 +41,19 @@ class Signal:
     features: dict[str, object] = field(default_factory=dict)
 
 
+def unmirror_detail(detail: dict[str, object]) -> dict[str, object]:
+    """Short side runs on mirrored bars: negate prices and swap zone top/bottom."""
+    out = dict(detail)
+    for key in ("liq_price", "h2"):
+        value = out.get(key)
+        if isinstance(value, int):
+            out[key] = -value
+    top, bot = out.get("zone_top"), out.get("zone_bot")
+    if isinstance(top, int) and isinstance(bot, int):
+        out["zone_top"], out["zone_bot"] = -bot, -top
+    return out
+
+
 class SideEngine:
     """Long-side rules. The short side is this same class fed with mirrored bars."""
 
@@ -92,8 +105,12 @@ class LsdStrategy:
         return signals
 
     def drain_events(self) -> list[Event]:
+        """Events of both sides; prices in short-side details are mapped back to real ticks."""
         events = [replace(e, side="long") for e in self.long.log.drain()]
-        events += [replace(e, side="short") for e in self.short.log.drain()]
+        events += [
+            replace(e, side="short", detail=unmirror_detail(e.detail))
+            for e in self.short.log.drain()
+        ]
         return sorted(events, key=lambda e: e.bar_index)
 
     @staticmethod

@@ -179,3 +179,20 @@ def test_bos_whose_origin_is_a_relocation_target_creates_no_duplicate() -> None:
     (zone,) = book.create(bars, bos_at(0, 2))
     assert zone.o_idx == 1  # relocated onto bar 1
     assert book.create(bars, bos_at(1, 2)) == []
+
+
+def test_zone_history_records_when_zones_end() -> None:
+    (zone,), book, _ = create(make_bars(*LEFT))
+    assert zone.ended_idx is None and book.history == [zone]
+    book.update(make_bars(*LEFT, (124, 124, 108, 111)))  # close inside -> destroyed on bar 3
+    assert (zone.state, zone.ended_idx) == ("destroyed", 3)
+    (dead,), book, _ = create(make_bars(O_BAR, (104, 114, 103, 113), (95, 99, 94, 98)))
+    assert (dead.state, dead.ended_idx) == ("dead", 2)
+
+
+def test_consumed_zone_records_its_end() -> None:
+    bars = make_bars(*LEFT)
+    (zone,), book, _ = create(bars)
+    book.update(make_bars(*LEFT, (124, 125, 120, 124)))
+    book.consume(zone)
+    assert zone.ended_idx == 3

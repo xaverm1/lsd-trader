@@ -26,6 +26,11 @@ class LiquidityBook:
         self._open: list[Liquidity] = []
         self._next_id = 0
 
+    @property
+    def open(self) -> list[Liquidity]:
+        """Liquidity not yet swept (for inspection)."""
+        return list(self._open)
+
     def add(self, bos: Bos) -> Liquidity:
         liq = Liquidity(self._next_id, bos.p_idx, bos.p_low, bos.bos_idx)
         self._next_id += 1

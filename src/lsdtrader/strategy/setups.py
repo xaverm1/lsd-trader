@@ -62,7 +62,14 @@ class SetupTracker:
         self._next_id += 1
         self._pending.append(setup)
         self._log.emit(
-            "setup_started", setup_id=setup.setup_id, zone_id=zone.zone_id, liq_idx=liq.idx
+            "setup_started",
+            setup_id=setup.setup_id,
+            zone_id=zone.zone_id,
+            zone_top=zone.top,
+            zone_bot=zone.bot,
+            zone_o_idx=zone.o_idx,
+            liq_idx=liq.idx,
+            liq_price=liq.price,
         )
         return setup
 

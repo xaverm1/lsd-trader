@@ -50,3 +50,25 @@ def test_bars_must_arrive_in_time_order() -> None:
     strat.on_bar(FULL_LONG[1])
     with pytest.raises(ValueError):
         strat.on_bar(FULL_LONG[0])
+
+
+def test_setup_events_carry_geometry_in_real_prices_for_both_sides() -> None:
+    for bars, side, top, bot, liq in [
+        (FULL_LONG, "long", 111, 106, 113),
+        ([b.mirrored() for b in FULL_LONG], "short", -106, -111, -113),
+    ]:
+        strat = LsdStrategy()
+        for bar in bars:
+            strat.on_bar(bar)
+        (started,) = [
+            e for e in strat.drain_events() if e.kind == "setup_started" and e.side == side
+        ]
+        d = started.detail
+        assert (d["zone_top"], d["zone_bot"], d["liq_price"], d["zone_o_idx"]) == (top, bot, liq, 6)
+
+
+def test_open_liquidity_is_visible_for_inspection() -> None:
+    strat = LsdStrategy()
+    for bar in FULL_LONG[:14]:
+        strat.on_bar(bar)
+    assert [liq.price for liq in strat.long.liquidity.open] == [106, 113]
