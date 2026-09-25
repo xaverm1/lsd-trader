@@ -152,8 +152,10 @@ class SimBroker:
 
     def submit(
         self, signals: Sequence[Signal], bar: TickBar, last_before_break: bool | None = None
-    ) -> None:
+    ) -> list[Position]:
+        """Open positions from signals; returns the positions opened."""
         brk = self._is_break(bar, last_before_break)
+        opened: list[Position] = []
         for sig in signals:
             reason = self._reject_reason(bar, brk)
             risk_ticks = abs(sig.entry - sig.stop)
@@ -168,8 +170,20 @@ class SimBroker:
             # Bars are bid prices: a long buys at the ask, a short sells at the bid.
             spread = inst.spread_ticks if d == 1 else 0
             fill = sig.entry + d * inst.slippage_ticks + spread
-            self.positions.append(Position(sig, qty, fill, risk_ticks, sig.entry, sig.entry))
+            pos = Position(sig, qty, fill, risk_ticks, sig.entry, sig.entry)
+            self.positions.append(pos)
+            opened.append(pos)
             self._log.emit("order_filled", setup_id=sig.setup_id, qty=qty)
+        return opened
+
+    def resolve_rest_of_bar(self, pos: Position, minutes: Sequence[TickBar]) -> Trade | None:
+        """Stop/target of a position opened inside a bar, on that bar's minutes after the
+        entry minute (the next bar's `on_bar` takes over from there)."""
+        rest = [m for m in minutes if m.ts > pos.signal.ts]
+        trade = self._resolve(pos, rest) if rest else None
+        if trade is not None:
+            self.positions.remove(pos)
+        return trade
 
     # -- internals ---------------------------------------------------------
 

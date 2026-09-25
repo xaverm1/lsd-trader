@@ -27,6 +27,9 @@ class StrategyConfig:
     sl_mode: Literal["wick", "zone_bottom", "zone_mid"] = "wick"
     rr: float = 4.0
     max_trades_per_zone: int = 1
+    # "bar": entry on the close of a strategy bar (Spec §7). "reclaim_1m": after a tap bar has
+    # closed, entry on the close of the first 1-minute bar back beyond the swept liquidity.
+    entry_mode: Literal["bar", "reclaim_1m"] = "bar"
 
     def __post_init__(self) -> None:
         if self.piv_len < 1:

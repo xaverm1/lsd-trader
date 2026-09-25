@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from lsdtrader.core.bar import TickBar
 from lsdtrader.core.config import StrategyConfig
@@ -39,6 +40,7 @@ class Entry:
     sweep_idx: int
     tap_idx: int
     features: dict[str, object] = field(default_factory=dict)
+    ts: datetime | None = None  # 1-minute bar of a reclaim entry (None: the strategy bar)
 
 
 class SetupTracker:
@@ -102,12 +104,41 @@ class SetupTracker:
                 return False
             else:
                 return True
-        if self._triggered(bars, s, i):
+        if self._cfg.entry_mode == "reclaim_1m":
+            pass  # entries come from minute_entries on the following bars
+        elif self._triggered(bars, s, i):
             return self._enter(bars, s, i)
         if i - s.tap_idx >= cfg.max_bars_tap_to_entry:
             self._log.emit("no_entry", setup_id=s.setup_id)
             return False
         return True
+
+    def minute_entries(self, bars: Sequence[TickBar], minutes: Sequence[TickBar]) -> list[Entry]:
+        """Reclaim entries inside the next strategy bar (`bars` end with the bar before it).
+
+        A setup whose tap bar has closed enters on the close of the first minute that closes
+        above the swept liquidity; the stop is the lowest low since the sweep, to the minute.
+        """
+        i = len(bars)  # index the strategy bar of `minutes` will get
+        entries: list[Entry] = []
+        keep: list[Setup] = []
+        for s in self._pending:
+            if s.tap_idx is None or s.zone.state != "left":
+                keep.append(s)
+                continue
+            low = min(b.low for b in bars[s.sweep_idx :])
+            entry = None
+            for m in minutes:
+                low = min(low, m.low)
+                if m.close > s.liq.price:
+                    entry = self._enter(bars, s, i, m.close, low, m.ts)
+                    break
+            if entry is None:
+                keep.append(s)
+            else:
+                entries.append(entry)
+        self._pending = keep
+        return entries
 
     def _triggered(self, bars: Sequence[TickBar], s: Setup, i: int) -> bool:
         bar = bars[i]
@@ -123,14 +154,26 @@ class SetupTracker:
             return bar.close - bar.open >= self._cfg.min_body_ticks
         return True
 
-    def _enter(self, bars: Sequence[TickBar], s: Setup, i: int) -> Entry:
+    def _enter(
+        self,
+        bars: Sequence[TickBar],
+        s: Setup,
+        i: int,
+        close: int | None = None,
+        wick_low: int | None = None,
+        ts: datetime | None = None,
+    ) -> Entry:
+        """Entry on bar `i` at its close, or at a minute's `close` (reclaim, with the lowest
+        low since the sweep in `wick_low` and the minute in `ts`)."""
         cfg, z = self._cfg, s.zone
         assert s.tap_idx is not None
-        entry = bars[i].close
+        entry = bars[i].close if close is None else close
         if cfg.sl_mode == "zone_bottom":
             stop = z.bot
         elif cfg.sl_mode == "zone_mid":
             stop = (z.top + z.bot) // 2
+        elif wick_low is not None:
+            stop = wick_low
         else:
             stop = min(b.low for b in bars[s.sweep_idx : i + 1])
         stop -= cfg.sl_buffer_ticks
@@ -161,6 +204,7 @@ class SetupTracker:
             s.sweep_idx,
             s.tap_idx,
             features,
+            ts,
         )
         self._zones.consume(z)
         self._log.emit("entry", setup_id=s.setup_id, zone_id=z.zone_id)

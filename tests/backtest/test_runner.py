@@ -1,6 +1,9 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from lsdtrader.backtest.runner import run_backtest
+from lsdtrader.core.bar import TickBar
+from lsdtrader.core.config import StrategyConfig
 from lsdtrader.core.instrument import Instrument
 from tests.helpers import FULL_LONG, make_bars
 
@@ -86,3 +89,34 @@ def test_run_up_without_take_profit_ends_with_the_data() -> None:
     result = run_backtest(INST, FULL_LONG + TO_TARGET)
     (t,) = [t for t in result.trades if t.side == "long"]
     assert (t.mfe_free_r, t.exit_free_reason, t.exit_free_r) == (4.25, "end_of_data", 4.0)
+
+
+def reclaim_minutes() -> tuple[TickBar, list[TickBar]]:
+    """Bar 16 of FULL_LONG as 1-minute bars: dips to 109, closes back above the swept
+    liquidity 113 in minute 2 (114), then runs through the target in minute 3."""
+    t = FULL_LONG[15].ts + (FULL_LONG[15].ts - FULL_LONG[14].ts)
+    mins = [
+        TickBar(t, 112, 113, 109, 112),
+        TickBar(t + timedelta(minutes=1), 112, 114, 112, 114),
+        TickBar(t + timedelta(minutes=2), 114, 140, 114, 139),
+    ]
+    return TickBar(t, 112, 140, 109, 139), mins
+
+
+def test_reclaim_entry_on_the_first_minute_back_above_the_liquidity() -> None:
+    bar, mins = reclaim_minutes()
+    minutes = {bar.ts: mins}
+    cfg = StrategyConfig(entry_mode="reclaim_1m")
+    result = run_backtest(INST, FULL_LONG[:16] + [bar], minutes, cfg)
+    (t,) = [t for t in result.trades if t.side == "long"]
+    # entry 114 at the close of minute 2, stop = lowest low since the sweep (109),
+    # target 114 + 4 x 5 = 134, reached in minute 3 of the same bar
+    assert (t.entry_signal, t.stop, t.target, t.entry_ts) == (114, 109, 134, mins[1].ts)
+    assert (t.exit_reason, t.exit_ts) == ("tp", mins[2].ts)
+
+
+def test_reclaim_needs_the_tap_bar_to_have_closed() -> None:
+    # Without a bar after the tap bar there is no minute to reclaim on: no trade.
+    cfg = StrategyConfig(entry_mode="reclaim_1m")
+    result = run_backtest(INST, FULL_LONG[:16], None, cfg)
+    assert [t for t in result.trades if t.side == "long"] == []

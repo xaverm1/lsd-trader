@@ -66,10 +66,17 @@ def run_backtest(
         exit_minutes = _exit_minutes(bar, minutes, log)
         trades += broker.on_bar(bar, exit_minutes, brk)
         free += shadow.on_bar(bar, exit_minutes, brk)
-        new = strategy.on_bar(bar)
+        new = strategy.on_bar(bar, exit_minutes if minutes is not None else None)
         signals += new
-        broker.submit(new, bar, brk)
-        shadow.submit([_without_target(s) for s in new], bar, brk)
+        for b, sigs, out in (
+            (broker, new, trades),
+            (shadow, [_without_target(s) for s in new], free),
+        ):
+            for pos in b.submit(sigs, bar, brk):
+                if pos.signal.ts != bar.ts:  # opened inside the bar (reclaim entry)
+                    trade = b.resolve_rest_of_bar(pos, exit_minutes)
+                    if trade is not None:
+                        out.append(trade)
     if bars:
         trades += broker.close_all(bars[-1])
         free += shadow.close_all(bars[-1])

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Literal
@@ -73,8 +74,15 @@ class SideEngine:
         # RD-TREE v3 context candidates (research features, filter nothing)
         self.trends = {n: TrendTracker(n) for n in TREND_PIVOTS}
         self.levels = {n: LevelBook(n) for n in LEVEL_PIVOTS}
+        self._trend_state: dict[int, int] = {n: 0 for n in TREND_PIVOTS}
 
-    def on_bar(self, bar: TickBar) -> list[Entry]:
+    def on_bar(self, bar: TickBar, minutes: Sequence[TickBar] | None = None) -> list[Entry]:
+        """`minutes` (this bar's 1-minute bars, same side) feed reclaim entries."""
+        early: list[Entry] = []
+        if self.cfg.entry_mode == "reclaim_1m" and minutes:
+            early = self.setups.minute_entries(self.bars, minutes)
+            for e in early:
+                e.features.update(self._context(e, self._trend_state))
         self.bars.append(bar)
         i = len(self.bars) - 1
         self.log.bar_index = i
@@ -92,11 +100,13 @@ class SideEngine:
             for z in zones:
                 self.setups.start(z, liq, i, atr)
         trend = {n: t.update(self.bars) for n, t in self.trends.items()}
+        self._trend_state = trend
         for book in self.levels.values():
             book.update(self.bars)
         entries = self.setups.update(self.bars)
         for e in entries:
             e.features.update(self._context(e, trend))
+        entries = early + entries
         # an untraded touch by an opposing bar moves a left zone (Spec §5.2 amendment)
         running = {s.zone.zone_id for s in self.setups.pending}
         self.zones.relocate_touched(self.bars, running)
@@ -124,12 +134,16 @@ class LsdStrategy:
         self.short = SideEngine(self.cfg)
         self._last_ts: datetime | None = None
 
-    def on_bar(self, bar: TickBar) -> list[Signal]:
+    def on_bar(self, bar: TickBar, minutes: Sequence[TickBar] | None = None) -> list[Signal]:
+        """`minutes`: this bar's 1-minute bars (needed for entry_mode="reclaim_1m")."""
         if self._last_ts is not None and bar.ts <= self._last_ts:
             raise ValueError(f"bar at {bar.ts} is not after {self._last_ts}")
         self._last_ts = bar.ts
-        signals = [self._signal("long", e, bar) for e in self.long.on_bar(bar)]
-        signals += [self._signal("short", e, bar) for e in self.short.on_bar(bar.mirrored())]
+        mirrored = [m.mirrored() for m in minutes] if minutes else None
+        signals = [self._signal("long", e, bar) for e in self.long.on_bar(bar, minutes)]
+        signals += [
+            self._signal("short", e, bar) for e in self.short.on_bar(bar.mirrored(), mirrored)
+        ]
         return signals
 
     def drain_events(self) -> list[Event]:
@@ -148,7 +162,7 @@ class LsdStrategy:
         return Signal(
             side,
             e.entry_idx,
-            bar.ts,
+            e.ts or bar.ts,
             s * e.entry,
             s * e.stop,
             s * e.target,
