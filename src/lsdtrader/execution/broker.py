@@ -139,7 +139,8 @@ class SimBroker:
                 self._log.emit(reason, setup_id=sig.setup_id)
                 continue
             d = 1 if sig.side == "long" else -1
-            fill = sig.entry + d * self.instrument.slippage_ticks
+            inst = self.instrument
+            fill = sig.entry + d * (inst.slippage_ticks + inst.spread_ticks)
             self.positions.append(Position(sig, qty, fill, risk_ticks, sig.entry, sig.entry))
             self._log.emit("order_filled", setup_id=sig.setup_id, qty=qty)
 

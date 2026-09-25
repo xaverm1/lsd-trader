@@ -13,6 +13,7 @@ class Instrument:
     tick_value: float  # USD per tick per contract
     commission_per_side: float  # USD per contract per side
     slippage_ticks: int = 1
+    spread_ticks: int = 0  # CFDs: bid/ask spread paid once per trade (bars are bid prices)
 
     def to_ticks(self, price: float | Decimal | str) -> int:
         """Exact tick count of a price; raises if the price is off the tick grid."""
@@ -28,6 +29,12 @@ class Instrument:
 
 def _spec(root: str, tick: str, value: float, commission: float) -> Instrument:
     return Instrument(root, Decimal(tick), value, commission)
+
+
+def _cfd(root: str, spread: str) -> Instrument:
+    """CFD quoted to 0.001, one unit per 'contract', cost = spread only."""
+    tick = Decimal("0.001")
+    return Instrument(root, tick, float(tick), 0.0, 0, int(Decimal(spread) / tick))
 
 
 # Commissions are PLACEHOLDERS until the prop firm / broker is chosen (Strategy Spec §12).
@@ -48,12 +55,26 @@ INSTRUMENTS: dict[str, Instrument] = {
         _spec("MGC", "0.1", 1.00, 1.24),
         _spec("SIL", "0.005", 5.00, 1.24),
         _spec("MCL", "0.01", 1.00, 1.24),
+        # CFDs (HistData / Dukascopy). Spreads are PLACEHOLDERS for typical retail quotes.
+        _cfd("SPXUSD", "0.4"),
+        _cfd("NSXUSD", "1.0"),
+        _cfd("XAUUSD", "0.25"),
+        _cfd("XAGUSD", "0.02"),
+        _cfd("WTIUSD", "0.03"),
     )
+}
+
+# Other names for the same CFD (Dukascopy symbols).
+ALIASES = {
+    "USA500IDXUSD": "SPXUSD",
+    "USATECHIDXUSD": "NSXUSD",
+    "LIGHTCMDUSD": "WTIUSD",
 }
 
 
 def get_instrument(root: str) -> Instrument:
     try:
-        return INSTRUMENTS[root.upper()]
+        key = root.upper().replace(".", "").replace("/", "")
+        return INSTRUMENTS[ALIASES.get(key, key)]
     except KeyError:
         raise KeyError(f"unknown instrument {root!r}; known: {sorted(INSTRUMENTS)}") from None

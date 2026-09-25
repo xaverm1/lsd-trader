@@ -43,3 +43,11 @@ def test_micro_and_mini_share_tick_size() -> None:
 )
 def test_last_bar_before_break(utc: datetime, expected: bool) -> None:
     assert is_last_bar_before_break(utc) is expected
+
+
+def test_cfd_specs_and_aliases() -> None:
+    spx = get_instrument("SPXUSD")
+    assert spx.tick_size == Decimal("0.001") and spx.spread_ticks == 400
+    assert spx.commission_per_side == 0.0 and spx.slippage_ticks == 0
+    assert get_instrument("USA500.IDX/USD") is spx
+    assert get_instrument("usatechidxusd").root == "NSXUSD"

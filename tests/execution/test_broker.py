@@ -151,3 +151,12 @@ def test_explicit_break_flag_overrides_calendar() -> None:
     assert t.exit_reason == "flat_break"
     broker.submit([signal()], b, last_before_break=True)
     assert broker.positions == [] and "entry_before_break" in log.kinds()
+
+
+def test_cfd_spread_is_paid_on_entry() -> None:
+    cfd = Instrument("CFD", Decimal("0.001"), 0.001, 0.0, slippage_ticks=0, spread_ticks=3)
+    for side, stop, target, expected_fill in [("long", 90, 140, 103), ("short", 110, 60, 97)]:
+        log = EventLog()
+        broker = SimBroker(cfd, ExecutionConfig(), log)
+        broker.submit([signal(side, 100, stop, target)], bar(100, 100, 100, 100, minute=0))
+        assert broker.positions[0].entry_fill == expected_fill
