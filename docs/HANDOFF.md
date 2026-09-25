@@ -243,6 +243,20 @@ detail per trade). Checked: entry on the first minute after the tap bar closing 
 stop at the extreme since the sweep - as specified. Open point: when price already reclaimed
 P' inside the tap bar, the entry is simply the first minute after the tap bar.
 
+### SPX, 30m zones, sweep/tap/entry on 1 minute with CISD (2026-09-25)
+
+After Xaver's MES example (sweep, tap and 1-minute entry inside one 30m candle): new
+`entry_mode=sweep_1m_cisd`. Zones and P' from 30m bars; sweep, tap and entry minute by minute;
+entry on the first minute from the tap on that closes above P' and above the CISD level (ICT:
+open of the run of consecutive bearish minutes that made the low; mirrored for shorts); stop
+at the lowest low since the sweep. SPXUSD 2020-2025, holding overnight: 763 trades (127/yr),
+median stop 8.3 pts, gross TP4 +0.064 (t 0.9), TP6 +0.124 (t 1.3), TP10 +0.29 (t 2.2; 13
+levels looked at); ~0.6 pt ES cost -> TP6 +0.02 R/T net. Years at TP6: 20 +0.08, 21 +0.30,
+22 -0.09, 23 +0.45, 24 +0.04, 25 -0.01. Practically the same as the 30m reclaim run. The CISD
+level lies beyond P' in only 34 % of trades (the bearish run into the low is often just one
+or two candles), so the P' reclaim is usually the binding condition. Charts checked: entries
+follow the rule.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
