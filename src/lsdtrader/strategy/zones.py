@@ -1,0 +1,150 @@
+"""M3 · Demand zones (Strategy Spec §5): origin, relocation, geometry, destruction."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Literal
+
+from lsdtrader.core.bar import TickBar
+from lsdtrader.core.config import StrategyConfig
+from lsdtrader.core.events import EventLog
+from lsdtrader.strategy.structure import Bos
+
+ZoneState = Literal["building", "left", "destroyed", "dead", "consumed"]
+
+
+@dataclass(slots=True)
+class Zone:
+    zone_id: int
+    o_idx: int  # origin bar O
+    top: int
+    bot: int
+    p_idx: int  # swing low whose BOS created the zone
+    created_idx: int
+    kind: Literal["normal", "accuracy"] = "normal"
+    pending: bool = True  # geometry waits for the follow-up bar F
+    state: ZoneState = "building"
+    trades: int = 0
+
+    @property
+    def live(self) -> bool:
+        return self.state in ("building", "left")
+
+    def overlaps(self, bar: TickBar) -> bool:
+        return bar.low <= self.top and bar.high >= self.bot
+
+
+def is_opposing(bar: TickBar, doji_tol_ticks: int) -> bool:
+    """Bearish or doji: the bar type that can form a demand zone."""
+    return bar.close < bar.open or abs(bar.close - bar.open) <= doji_tol_ticks
+
+
+def find_origin(bars: Sequence[TickBar], p_idx: int, lookback: int, doji_tol_ticks: int) -> int:
+    """First opposing bar searching back from P (inclusive); P itself if none (§5.1)."""
+    for k in range(p_idx, max(p_idx - lookback, -1), -1):
+        if is_opposing(bars[k], doji_tol_ticks):
+            return k
+    return p_idx
+
+
+class ZoneBook:
+    def __init__(self, cfg: StrategyConfig, log: EventLog) -> None:
+        self._cfg = cfg
+        self._log = log
+        self._zones: list[Zone] = []
+        self._next_id = 0
+
+    def live(self) -> list[Zone]:
+        return [z for z in self._zones if z.live]
+
+    def create(self, bars: Sequence[TickBar], bos: Bos) -> list[Zone]:
+        """Create the zone(s) for a BOS and replay them up to the newest bar."""
+        o = find_origin(bars, bos.p_idx, self._cfg.zone_lookback, self._cfg.doji_tol_ticks)
+        created = [self._new(bars, o, bos)]
+        if self._cfg.extra_zones != "none":
+            created += self._extra(bars, bos, created)
+        return created
+
+    def update(self, bars: Sequence[TickBar]) -> None:
+        """Advance every live zone by the newest bar, then drop finished zones."""
+        k = len(bars) - 1
+        for z in self._zones:
+            if z.live:
+                self._step(bars, z, k)
+        self._zones = [z for z in self._zones if z.live]
+
+    def consume(self, zone: Zone) -> None:
+        zone.trades += 1
+        if zone.trades >= self._cfg.max_trades_per_zone:
+            zone.state = "consumed"
+
+    # -- internals ---------------------------------------------------------
+
+    def _new(self, bars: Sequence[TickBar], o: int, bos: Bos) -> Zone:
+        ob = bars[o]
+        zone = Zone(self._next_id, o, ob.high, ob.low, bos.p_idx, len(bars) - 1)
+        self._next_id += 1
+        self._log.emit("zone_created", zone_id=zone.zone_id, o_idx=o, p_idx=bos.p_idx)
+        for k in range(o + 1, len(bars)):
+            if not zone.live:
+                break
+            self._step(bars, zone, k)
+        self._zones.append(zone)
+        return zone
+
+    def _extra(self, bars: Sequence[TickBar], bos: Bos, created: list[Zone]) -> list[Zone]:
+        """Non-overlapping opposing bars between P and the BOS bar (§5.5)."""
+        tol = self._cfg.doji_tol_ticks
+        ks = [k for k in range(bos.p_idx + 1, bos.bos_idx) if is_opposing(bars[k], tol)]
+        if self._cfg.extra_zones == "last":
+            ks.reverse()
+        extra: list[Zone] = []
+        for k in ks:
+            if any(z.overlaps(bars[k]) or z.o_idx == k for z in created + extra):
+                continue
+            extra.append(self._new(bars, k, bos))
+            if self._cfg.extra_zones == "last":
+                break
+        return extra
+
+    def _step(self, bars: Sequence[TickBar], z: Zone, k: int) -> None:
+        if z.state == "building":
+            self._build_step(bars, z, k)
+        else:
+            self._destroy_step(bars[k], z)
+
+    def _build_step(self, bars: Sequence[TickBar], z: Zone, k: int) -> None:
+        bar = bars[k]
+        if is_opposing(bar, self._cfg.doji_tol_ticks) and z.overlaps(bar):
+            z.o_idx, z.top, z.bot = k, bar.high, bar.low
+            z.kind, z.pending = "normal", True
+            self._log.emit("zone_relocation", zone_id=z.zone_id, o_idx=k)
+        elif z.pending:
+            self._fix_geometry(bars[z.o_idx], bar, z)
+        if bar.close < z.bot:
+            z.state = "dead"
+            self._log.emit("zone_died_building", zone_id=z.zone_id)
+        elif bar.low > z.top:
+            z.state = "left"
+            self._log.emit("zone_left", zone_id=z.zone_id)
+
+    def _fix_geometry(self, o: TickBar, f: TickBar, z: Zone) -> None:
+        if self._cfg.zone_mode == "normal" or f.high > o.high:
+            z.kind, z.top, z.bot = "normal", o.high, o.low
+        else:
+            z.kind, z.top, z.bot = "accuracy", o.body_top, min(o.low, f.low)
+        z.pending = False
+
+    def _destroy_step(self, bar: TickBar, z: Zone) -> None:
+        if self._cfg.zone_kill == "close_inside":
+            if bar.close <= z.top:
+                self._destroy(z, "close")
+            elif bar.low < z.bot:
+                self._destroy(z, "wick")
+        elif bar.close < z.bot:
+            self._destroy(z, "close")
+
+    def _destroy(self, z: Zone, reason: str) -> None:
+        z.state = "destroyed"
+        self._log.emit(f"zone_destroyed_{reason}", zone_id=z.zone_id)
