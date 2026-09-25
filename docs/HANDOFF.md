@@ -72,6 +72,16 @@ costs are judged later on futures data. Zero-spread 2015-2021 = old gross: +0.04
 Keep in mind when judging a change: GC costs ~ $0.35/oz / stop in R (~0.4 R at the $0.90
 median stop), and the short-side bid-bar bias above still inflates short results.
 
+### Hour of day (gold 2015-2021, no costs, `scripts/hour_of_day.py`)
+
+Picture: `docs/results/hour_of_day_gold_2015-2021.png`. No single hour reaches |t| >= 2 (24
+tests; one would be expected by chance). Best 09-10 Berlin (+0.19 R/T, N=373, t=1.8, both
+halves positive), worst 04-05 (-0.15, N=164) and 18-19 (-0.15, N=182, sign flips between
+halves). Session blocks (fixed by convention, not by the result): London 08-14 +0.085 R/T
+(N=1952, t=1.8, both halves +), Asia 00-08 +0.048, NY overlap 14-18 +0.022,
+NY afternoon 18-24 -0.027. No time filter adopted; a session filter would be a hypothesis
+for 2022-2023, not a finding. DST-mismatch weeks before 2019 may shift single hours.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
