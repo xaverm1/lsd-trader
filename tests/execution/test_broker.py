@@ -230,3 +230,22 @@ def test_cfd_short_flat_exit_buys_at_the_ask() -> None:
     (t,) = broker.on_bar(last, [last])
     assert (t.exit_reason, t.exit_raw, t.exit_fill) == ("flat_break", 99, 99)
     assert (t.gross_r, t.net_r) == (pytest.approx(0.4), pytest.approx(0.1))
+
+
+def test_hold_overnight_has_no_flat_and_no_entry_window() -> None:
+    cfg = ExecutionConfig(flat_before_break=False, session_window=None)
+    last = TickBar(datetime(2024, 7, 8, 20, 5, tzinfo=UTC), 100, 110, 95, 105)  # 15:10 CT bar
+    trades, broker, _ = run(signal(), [last], cfg, five=last)
+    assert trades == [] and len(broker.positions) == 1
+    log = EventLog()
+    broker = SimBroker(INST, cfg, log)
+    broker.submit([signal()], TickBar(datetime(2024, 1, 8, 20, 0, tzinfo=UTC), 100, 100, 100, 100))
+    assert len(broker.positions) == 1  # 14:00 CT is allowed now
+
+
+def test_flat_check_uses_the_bar_length() -> None:
+    # A 15-minute bar 14:55-15:10 CT is the last one before a 15:10 CT flat time.
+    cfg = ExecutionConfig(bar_minutes=15)
+    last = TickBar(datetime(2024, 7, 8, 19, 55, tzinfo=UTC), 100, 110, 95, 105)
+    (t,), _, _ = run(signal(), [last], cfg, five=last)
+    assert t.exit_reason == "flat_break"

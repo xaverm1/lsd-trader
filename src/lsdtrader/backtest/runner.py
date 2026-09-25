@@ -13,7 +13,6 @@ from lsdtrader.core.instrument import Instrument
 from lsdtrader.execution.broker import ExecutionConfig, SimBroker, Trade
 from lsdtrader.strategy.lsd import LsdStrategy, Signal
 
-BAR = timedelta(minutes=5)
 # A pause this long between bars is a closure (holiday or early close), not thin trading.
 BREAK_GAP = timedelta(minutes=60)
 # Target of the shadow broker: never reached, so its trades end at the stop or the flat time.
@@ -58,10 +57,11 @@ def run_backtest(
     free: list[Trade] = []
     signals: list[Signal] = []
     trades: list[Trade] = []
+    bar_len = timedelta(minutes=exec_cfg.bar_minutes)
     for i, bar in enumerate(bars):
         log.bar_index = i
         brk = None
-        if i + 1 < len(bars) and bars[i + 1].ts - (bar.ts + BAR) >= BREAK_GAP:
+        if i + 1 < len(bars) and bars[i + 1].ts - (bar.ts + bar_len) >= BREAK_GAP:
             brk = True
         exit_minutes = _exit_minutes(bar, minutes, log)
         trades += broker.on_bar(bar, exit_minutes, brk)

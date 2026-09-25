@@ -65,3 +65,31 @@ def test_instrument_must_match_histdata_symbol(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         main(["data-report", str(spx), "--instrument", "XAUUSD"])
     assert main(["data-report", str(spx), "--instrument", "USA500.IDX/USD"]) == 0
+
+
+def test_backtest_timeframe_and_hold_overnight(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    z = histdata_zip(tmp_path / "a.zip", 120)
+    assert (
+        main(
+            [
+                "backtest",
+                str(z),
+                "--timeframe",
+                "15",
+                "--hold-overnight",
+                "--out",
+                str(tmp_path / "runs"),
+            ]
+        )
+        == 0
+    )
+    assert "8 bars" in capsys.readouterr().out
+    (meta,) = (tmp_path / "runs").glob("*/meta.json")
+    cfg = json.loads(meta.read_text())["execution_config"]
+    assert (cfg["bar_minutes"], cfg["flat_before_break"], cfg["session_window"]) == (
+        15,
+        False,
+        None,
+    )

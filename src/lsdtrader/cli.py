@@ -55,12 +55,14 @@ def parse_overrides(items: Sequence[str]) -> dict[str, object]:
 
 def cmd_backtest(args: argparse.Namespace) -> int:
     cfg = StrategyConfig(**parse_overrides(args.set))  # type: ignore[arg-type]
-    exec_cfg = ExecutionConfig(sizing=args.sizing, risk_usd=args.risk)
-    data = load_data(args.files, args.instrument)
+    exec_cfg = ExecutionConfig(sizing=args.sizing, risk_usd=args.risk, bar_minutes=args.timeframe)
+    if args.hold_overnight:
+        exec_cfg = dataclasses.replace(exec_cfg, flat_before_break=False, session_window=None)
+    data = load_data(args.files, args.instrument, args.timeframe)
     result = run_backtest(data.instrument, data.bars, data.minutes, cfg, exec_cfg)
     notes = {
         "data_source": data.source,
-        "exit_resolution": "1-minute bars" if data.minutes else "5-minute bars (stop first)",
+        "exit_resolution": "1-minute bars" if data.minutes else "strategy bars (stop first)",
     }
     # absolute paths, so `lsd review` can reload the data from anywhere
     folder = write_run(result, args.out, [f.resolve() for f in args.files], notes)
@@ -132,6 +134,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     bt.add_argument("--sizing", choices=["research", "realistic"], default="research")
     bt.add_argument("--risk", type=float, default=100.0, help="USD risk per trade (1R)")
     bt.add_argument("--out", type=Path, default=Path("runs"))
+    bt.add_argument(
+        "--timeframe",
+        type=int,
+        default=5,
+        choices=[5, 15, 30, 60, 240],
+        help="strategy bar length in minutes (built from the 1-minute files)",
+    )
+    bt.add_argument(
+        "--hold-overnight",
+        action="store_true",
+        help="no forced close at the flat time and no entry window (positions run on)",
+    )
     bt.set_defaults(func=cmd_backtest)
 
     dr = sub.add_parser("data-report", help="gaps and price jumps in 1-minute files")

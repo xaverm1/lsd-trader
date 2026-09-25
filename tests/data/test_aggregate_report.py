@@ -85,3 +85,16 @@ def test_report_without_dst_mismatch_week_says_so() -> None:
     )
     assert report.dst_reopens == 0
     assert "no reopen in a DST-mismatch week" in report.to_markdown()
+
+
+def test_longer_bars_align_to_midnight_utc() -> None:
+    from lsdtrader.data.aggregate import bar_start, to_bars
+
+    assert bar_start(datetime(2025, 1, 2, 14, 37, tzinfo=UTC), 240) == datetime(
+        2025, 1, 2, 12, 0, tzinfo=UTC
+    )
+    minutes = [minute(i, 100 + i, 110 + i, 90, 105) for i in range(40)]  # 14:30 - 15:09
+    bars, groups = to_bars(minutes, 15)
+    assert [b.ts.minute for b in bars] == [30, 45, 0]
+    assert (bars[0].open, bars[0].high, bars[0].close) == (100, 124, 105)
+    assert len(groups[bars[0].ts]) == 15

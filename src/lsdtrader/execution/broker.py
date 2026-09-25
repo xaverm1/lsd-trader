@@ -34,6 +34,7 @@ class ExecutionConfig:
     session_tz: str = "America/Chicago"
     flat_before_break: bool = True
     flat_time: time = time(15, 10)  # CT; time(16, 0) = the CME halt itself
+    bar_minutes: int = 5  # length of the strategy bars (for the last-bar-before-flat check)
 
     def __post_init__(self) -> None:
         if self.risk_usd <= 0:
@@ -177,7 +178,7 @@ class SimBroker:
             return False
         if override is not None:
             return override
-        return is_last_bar_before_break(bar.ts, flat_at=self.cfg.flat_time)
+        return is_last_bar_before_break(bar.ts, self.cfg.bar_minutes, self.cfg.flat_time)
 
     def _reject_reason(self, bar: TickBar, brk: bool) -> str | None:
         cfg = self.cfg
