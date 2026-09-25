@@ -13,3 +13,14 @@ source .venv/Scripts/activate   # Windows Git Bash; on Linux/macOS: source .venv
 python -m pip install -e ".[dev]"
 pytest
 ```
+
+## Backtest
+
+```bash
+lsd backtest path/to/tradingview_export.json --set rr=3 --out runs
+```
+
+Each run writes `runs/<timestamp>_<instrument>_<fingerprint>/` with `meta.json` (config, data
+checksums, git commit), `trades.parquet`, `events.parquet` and a descriptive `summary.md`.
+Results are in R, net of commission and slippage. A backtest summary is not a verdict on the
+strategy; that needs the out-of-sample methodology of sub-project 3.
