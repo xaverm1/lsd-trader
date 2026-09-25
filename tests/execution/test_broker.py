@@ -183,10 +183,50 @@ def test_explicit_break_flag_overrides_calendar() -> None:
     assert broker.positions == [] and "entry_before_break" in log.kinds()
 
 
-def test_cfd_spread_is_paid_on_entry() -> None:
-    cfd = Instrument("CFD", Decimal("0.001"), 0.001, 0.0, slippage_ticks=0, spread_ticks=3)
-    for side, stop, target, expected_fill in [("long", 90, 140, 103), ("short", 110, 60, 97)]:
-        log = EventLog()
-        broker = SimBroker(cfd, ExecutionConfig(), log)
-        broker.submit([signal(side, 100, stop, target)], bar(100, 100, 100, 100, minute=0))
-        assert broker.positions[0].entry_fill == expected_fill
+CFD = Instrument("CFD", Decimal("0.001"), 0.001, 0.0, slippage_ticks=0, spread_ticks=3)
+
+
+def cfd_run(sig: Signal, minutes: Sequence[TickBar]) -> tuple[list[Trade], SimBroker]:
+    broker = SimBroker(CFD, ExecutionConfig(), EventLog())
+    broker.submit([sig], bar(100, 100, 100, 100, minute=0))
+    return broker.on_bar(minutes[-1], minutes), broker
+
+
+def test_cfd_long_buys_at_the_ask_short_sells_at_the_bid() -> None:
+    # Bars are bid prices. A long pays the spread on entry, a short on its exit (a buy).
+    _, broker = cfd_run(signal("long", 100, 90, 140), [bar(100, 100, 100, 100)])
+    assert broker.positions[0].entry_fill == 103
+    _, broker = cfd_run(signal("short", 100, 110, 60), [bar(100, 100, 100, 100)])
+    assert broker.positions[0].entry_fill == 100
+
+
+def test_cfd_short_stop_triggers_on_the_ask() -> None:
+    # Review finding (bid-bar bias): the bid high 107 is an ask of 110 -> the buy stop fills.
+    (t,), _ = cfd_run(signal("short", 100, 110, 60), [bar(100, 107, 99, 105)])
+    assert (t.exit_reason, t.exit_raw, t.exit_fill) == ("sl", 110, 110)
+    assert t.net_r == pytest.approx(-1.0)  # sold 100, bought back 110
+    assert t.gross_r == pytest.approx(-0.7)  # on the bid chart it left at 107
+    assert t.cost_r == pytest.approx(0.3)  # the spread, same as for a long
+
+
+def test_cfd_short_target_needs_the_ask() -> None:
+    # Bid low 60 is an ask of 63: the buy limit at 60 is not reached yet.
+    trades, broker = cfd_run(signal("short", 100, 110, 60), [bar(100, 101, 60, 62)])
+    assert trades == [] and len(broker.positions) == 1
+    (t,), _ = cfd_run(signal("short", 100, 110, 60), [bar(100, 101, 57, 58)])
+    assert (t.exit_reason, t.exit_fill, t.net_r, t.gross_r) == ("tp", 60, 4.0, pytest.approx(4.3))
+
+
+def test_cfd_long_is_unchanged() -> None:
+    (t,), _ = cfd_run(signal("long", 100, 90, 140), [bar(100, 101, 90, 92)])
+    assert (t.exit_reason, t.exit_fill) == ("sl", 90)
+    assert (t.gross_r, t.net_r) == (pytest.approx(-1.0), pytest.approx(-1.3))
+
+
+def test_cfd_short_flat_exit_buys_at_the_ask() -> None:
+    last = TickBar(datetime(2024, 7, 8, 20, 5, tzinfo=UTC), 100, 101, 95, 96)  # 15:10 CT
+    broker = SimBroker(CFD, ExecutionConfig(), EventLog())
+    broker.submit([signal("short", 100, 110, 60)], bar(100, 100, 100, 100, minute=0))
+    (t,) = broker.on_bar(last, [last])
+    assert (t.exit_reason, t.exit_raw, t.exit_fill) == ("flat_break", 99, 99)
+    assert (t.gross_r, t.net_r) == (pytest.approx(0.4), pytest.approx(0.1))

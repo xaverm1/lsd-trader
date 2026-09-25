@@ -16,6 +16,8 @@ from lsdtrader.strategy.lsd import LsdStrategy, Signal
 BAR = timedelta(minutes=5)
 # A pause this long between bars is a closure (holiday or early close), not thin trading.
 BREAK_GAP = timedelta(minutes=60)
+# Target of the shadow broker: never reached, so its trades end at the stop or the flat time.
+NO_TARGET = 10**15
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +52,10 @@ def run_backtest(
     strategy = LsdStrategy(cfg)
     log = EventLog()
     broker = SimBroker(instrument, exec_cfg, log)
+    # Shadow broker: the same signals without take profit (exact as long as the positions
+    # do not limit each other, i.e. max_open_positions is off).
+    shadow = SimBroker(instrument, exec_cfg, EventLog())
+    free: list[Trade] = []
     signals: list[Signal] = []
     trades: list[Trade] = []
     for i, bar in enumerate(bars):
@@ -57,17 +63,42 @@ def run_backtest(
         brk = None
         if i + 1 < len(bars) and bars[i + 1].ts - (bar.ts + BAR) >= BREAK_GAP:
             brk = True
-        trades += broker.on_bar(bar, _exit_minutes(bar, minutes, log), brk)
+        exit_minutes = _exit_minutes(bar, minutes, log)
+        trades += broker.on_bar(bar, exit_minutes, brk)
+        free += shadow.on_bar(bar, exit_minutes, brk)
         new = strategy.on_bar(bar)
         signals += new
         broker.submit(new, bar, brk)
+        shadow.submit([_without_target(s) for s in new], bar, brk)
     if bars:
         trades += broker.close_all(bars[-1])
+        free += shadow.close_all(bars[-1])
     times = [b.ts for b in bars]
-    trades = [replace(t, sweep_ts=times[t.sweep_idx], tap_ts=times[t.tap_idx]) for t in trades]
+    by_setup = {f.setup_id: f for f in free}
+    trades = [
+        _with_free_run(replace(t, sweep_ts=times[t.sweep_idx], tap_ts=times[t.tap_idx]), by_setup)
+        for t in trades
+    ]
     events = strategy.drain_events() + [replace(e, side="broker") for e in log.drain()]
     events.sort(key=lambda e: e.bar_index)
     return RunResult(instrument, cfg, exec_cfg, len(bars), signals, trades, events, times)
+
+
+def _without_target(sig: Signal) -> Signal:
+    return replace(sig, target=sig.entry + (NO_TARGET if sig.side == "long" else -NO_TARGET))
+
+
+def _with_free_run(t: Trade, free: Mapping[str, Trade]) -> Trade:
+    f = free.get(t.setup_id)
+    if f is None:
+        return t
+    return replace(
+        t,
+        mfe_free_r=f.mfe_r,
+        mfe_free_ts=f.mfe_ts,
+        exit_free_reason=f.exit_reason,
+        exit_free_r=f.gross_r,
+    )
 
 
 def _exit_minutes(

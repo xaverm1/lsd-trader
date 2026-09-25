@@ -69,3 +69,20 @@ def test_trade_records_setup_geometry_and_times() -> None:
     assert (t.zone_top, t.zone_bot, t.liq_level) == (111, 106, 113)
     assert (t.sweep_ts, t.tap_ts) == (FULL_LONG[15].ts, FULL_LONG[15].ts)
     assert result.bar_times[16] == FULL_LONG[16].ts
+
+
+def test_trade_records_the_run_up_without_take_profit() -> None:
+    # The target 130 (4 R) is hit on bar 18, but price keeps running to 138 (6 R) and then
+    # falls to the stop 110. Without a take profit the trade would have ended at -1 R.
+    after = make_bars((130, 138, 129, 137), (137, 137, 109, 109), start=19)
+    result = run_backtest(INST, FULL_LONG + TO_TARGET + after)
+    (t,) = [t for t in result.trades if t.side == "long"]
+    assert (t.exit_reason, t.mfe_r) == ("tp", 4.0)
+    assert (t.mfe_free_r, t.exit_free_reason, t.exit_free_r) == (6.0, "sl", -1.0)
+    assert t.mfe_free_ts == after[0].ts
+
+
+def test_run_up_without_take_profit_ends_with_the_data() -> None:
+    result = run_backtest(INST, FULL_LONG + TO_TARGET)
+    (t,) = [t for t in result.trades if t.side == "long"]
+    assert (t.mfe_free_r, t.exit_free_reason, t.exit_free_r) == (4.25, "end_of_data", 4.0)

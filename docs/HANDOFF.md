@@ -84,6 +84,10 @@ Same run reproduced exactly (6736 trades, -2162.5 R). `scripts/stop_size.py`:
   trigger earlier and its target later than simulated. The bias scales with spread/stop, i.e.
   it inflates exactly the small-stop gross. Fix before any further filter work: shift the
   short side's stop/target checks by the spread (and check where the long entry fills).
+  **Fixed 2026-09-25:** a long buys at the ask (entry + spread) and exits on the bid; a short
+  sells at the bid and its stop/target/flat exit trigger on the ask (bid + spread). cost_r is
+  the spread for both sides, gross_r is the bid-chart result. With the gold spread at 0 this
+  changes nothing (rerun identical); it matters for SPX and once costs come back.
 - MGC is likely MORE expensive per ounce than the $0.25 CFD placeholder (~$0.55 incl. 1 tick
   slippage per side); GC ~$0.35. A stop buffer cannot be tested post hoc and needs a rerun.
 
@@ -118,6 +122,26 @@ Gold 2015-2021, no costs, fixed clock: 6737 -> **6407 trades, +264 R -> +301 R, 
 2019 +109, 2020 -12, 2021 -74 R. The improvement is not evidence (the cut happens to remove
 three negative hours seen in the table). Worth a look: the SL/TP exits alone are -112 R; the
 whole profit comes from the 395 forced 15:10 CT exits (+1.04 R/trade, +413 R).
+
+### Frozen baseline (2026-09-25)
+
+All defaults (spec §9 incl. prop-firm hours, rr 4, spread 0), gold 2015-2021, fixed clock,
+bid/ask fix: **6407 trades, +300.7 R, +0.047 R/trade, t 1.91**. Every variant is tested
+one at a time against exactly this baseline (not stacked); the list of candidates is in the
+chat of 2026-09-25 (rr, sl_mode, sl_buffer in $, entry_trigger, tap->entry, sweep->tap,
+liq distance, time exit). Setup-definition parameters (piv_len, bos_*, zone_*) are not optimised.
+
+### Run-up without take profit (MFE, `scripts/take_profit.py`)
+
+Every trade now carries `mfe_free_r` / `mfe_free_ts` / `exit_free_reason` / `exit_free_r`:
+the same trade run by a shadow broker without take profit (until stop or 15:10 CT flat), so
+any target can be evaluated exactly post hoc (while `max_open_positions` is off). `mfe_ts`
+is the minute of the (capped) MFE. Baseline result (gross R/trade, 13 levels looked at):
+TP 0.5-3 R about 0 (-0.009 to +0.017); 3.5 R +0.039; 4 R +0.047 (t 1.9); 5 R +0.065 (t 2.4);
+6 R +0.063; 8 R +0.046; 10 R +0.073 (t 2.0); no TP +0.070 (t 1.3). Close targets do NOT
+help (my earlier guess from the flat exits was wrong); any edge sits in the few long runners.
+The curve is noisy and no level beats the ~2.9 multiple-testing bar; 5 R vs 4 R is not a
+finding. Median run-up of stopped trades 0.61 R; 34 % of them reached 1 R, 14 % 2 R first.
 
 ## Working rules
 

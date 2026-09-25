@@ -50,10 +50,20 @@ class Position:
     risk_ticks: int
     best: int  # most favourable price seen since entry
     worst: int  # most adverse price seen since entry
+    best_ts: datetime | None = None  # minute in which `best` was reached
 
     @property
     def d(self) -> int:
         return 1 if self.signal.side == "long" else -1
+
+    def note_best(self, price: int, ts: datetime) -> None:
+        if self.d * (price - self.best) > 0:
+            self.best, self.best_ts = price, ts
+
+    def exit_shift(self, inst: Instrument) -> int:
+        """Ticks from the bid bars to the quote this position exits on: a long sells at the
+        bid (0), a short buys back at the ask (+spread)."""
+        return inst.spread_ticks if self.d == -1 else 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +99,13 @@ class Trade:
     features: dict[str, object] = field(default_factory=dict)
     sweep_ts: datetime | None = None  # filled in by the runner, which knows bar times
     tap_ts: datetime | None = None
+    mfe_ts: datetime | None = None  # minute of the maximum favourable excursion
+    # The same trade without take profit (runner): how far price ran before the stop or the
+    # flat time, and how it would have ended. Lets any other target be evaluated exactly.
+    mfe_free_r: float | None = None
+    mfe_free_ts: datetime | None = None
+    exit_free_reason: str | None = None
+    exit_free_r: float | None = None  # gross R
 
 
 class SimBroker:
@@ -111,7 +128,8 @@ class SimBroker:
         for pos in self.positions:
             trade = self._resolve(pos, minutes)
             if trade is None and brk:
-                trade = self._close(pos, bar.close, bar.ts, "flat_break", slip=True)
+                price = bar.close + pos.exit_shift(self.instrument)
+                trade = self._close(pos, price, bar.ts, "flat_break", slip=True)
             if trade is None:
                 still_open.append(pos)
             else:
@@ -121,8 +139,10 @@ class SimBroker:
 
     def close_all(self, bar: TickBar) -> list[Trade]:
         """Close everything at the bar close (end of data)."""
+        inst = self.instrument
         closed = [
-            self._close(p, bar.close, bar.ts, "end_of_data", slip=True) for p in self.positions
+            self._close(p, bar.close + p.exit_shift(inst), bar.ts, "end_of_data", slip=True)
+            for p in self.positions
         ]
         self.positions = []
         return closed
@@ -144,7 +164,9 @@ class SimBroker:
                 continue
             d = 1 if sig.side == "long" else -1
             inst = self.instrument
-            fill = sig.entry + d * (inst.slippage_ticks + inst.spread_ticks)
+            # Bars are bid prices: a long buys at the ask, a short sells at the bid.
+            spread = inst.spread_ticks if d == 1 else 0
+            fill = sig.entry + d * inst.slippage_ticks + spread
             self.positions.append(Position(sig, qty, fill, risk_ticks, sig.entry, sig.entry))
             self._log.emit("order_filled", setup_id=sig.setup_id, qty=qty)
 
@@ -176,19 +198,21 @@ class SimBroker:
         return raw if self.cfg.sizing == "research" else float(math.floor(raw))
 
     def _resolve(self, pos: Position, minutes: Sequence[TickBar]) -> Trade | None:
-        d, sig = pos.d, pos.signal
+        # Stop and target are checked on the quote the exit trades at (ask for a short, i.e.
+        # bid + spread); excursions are kept on the bid chart.
+        d, sig, sh = pos.d, pos.signal, pos.exit_shift(self.instrument)
         for m in minutes:
-            if d * (m.open - sig.stop) <= 0:  # gapped through the stop
+            if d * (m.open + sh - sig.stop) <= 0:  # gapped through the stop
                 pos.worst = min(pos.worst, m.open) if d == 1 else max(pos.worst, m.open)
-                return self._close(pos, m.open, m.ts, "sl", slip=True)
-            if d * (m.open - sig.target) >= 0:  # gapped through the target: limit fills at target
-                pos.best = max(pos.best, m.open) if d == 1 else min(pos.best, m.open)
+                return self._close(pos, m.open + sh, m.ts, "sl", slip=True)
+            if d * (m.open + sh - sig.target) >= 0:  # gapped through the target: fills at target
+                pos.note_best(m.open, m.ts)
                 return self._close(pos, sig.target, m.ts, "tp", slip=False)
             fav, adv = (m.high, m.low) if d == 1 else (m.low, m.high)
-            hit_sl = d * (adv - sig.stop) <= 0
-            hit_tp = d * (fav - sig.target) >= 0
+            hit_sl = d * (adv + sh - sig.stop) <= 0
+            hit_tp = d * (fav + sh - sig.target) >= 0
             if not hit_sl:
-                pos.best = max(pos.best, fav) if d == 1 else min(pos.best, fav)
+                pos.note_best(fav, m.ts)
             pos.worst = min(pos.worst, adv) if d == 1 else max(pos.worst, adv)
             if hit_sl:
                 return self._close(pos, sig.stop, m.ts, "sl", slip=True)
@@ -199,19 +223,22 @@ class SimBroker:
     def _close(
         self, pos: Position, price: int, ts: datetime, reason: ExitReason, slip: bool
     ) -> Trade:
+        """`price` is the exit level on the quote the exit trades at (ask for a short)."""
         inst, sig, d = self.instrument, pos.signal, pos.d
+        sh = pos.exit_shift(inst)
         fill = price - d * inst.slippage_ticks if slip else price
         risk = pos.risk_ticks
         pnl = d * (fill - pos.entry_fill) * inst.tick_value * pos.qty
         pnl -= 2 * inst.commission_per_side * pos.qty
         net_r = pnl / (risk * inst.tick_value * pos.qty)
-        gross_r = d * (price - sig.entry) / risk
-        # Excursions stop at the exit: favourable at the target, adverse at the stop
-        # unless a gap filled beyond it.
+        gross_r = d * (price - sh - sig.entry) / risk  # on the bid chart, before costs
+        # Excursions (bid chart) stop at the exit: favourable at the target, adverse at the
+        # stop unless a gap filled beyond it.
+        target, stop, exit_bid = sig.target - sh, sig.stop - sh, price - sh
         if d == 1:
-            best, worst = min(pos.best, sig.target), max(pos.worst, min(sig.stop, price))
+            best, worst = min(pos.best, target), max(pos.worst, min(stop, exit_bid))
         else:
-            best, worst = max(pos.best, sig.target), min(pos.worst, max(sig.stop, price))
+            best, worst = max(pos.best, target), min(pos.worst, max(stop, exit_bid))
         self._log.emit("exit", setup_id=sig.setup_id, reason=reason)
         return Trade(
             instrument=inst.root,
@@ -233,6 +260,7 @@ class SimBroker:
             net_r=net_r,
             cost_r=gross_r - net_r,
             mfe_r=d * (best - sig.entry) / risk,
+            mfe_ts=pos.best_ts,
             mae_r=d * (sig.entry - worst) / risk,
             entry_bar=sig.bar_index,
             zone_top=sig.zone_top,
