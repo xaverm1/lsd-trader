@@ -1,0 +1,133 @@
+from collections.abc import Sequence
+from dataclasses import replace
+from datetime import UTC, datetime, time, timedelta
+from decimal import Decimal
+
+import pytest
+
+from lsdtrader.core.bar import TickBar
+from lsdtrader.core.events import EventLog
+from lsdtrader.core.instrument import Instrument
+from lsdtrader.execution.broker import ExecutionConfig, SimBroker, Trade
+from lsdtrader.strategy.lsd import Signal
+
+# 1 tick = 10 USD, commission 1 USD per side, 1 tick slippage
+INST = Instrument("TEST", Decimal("0.25"), tick_value=10.0, commission_per_side=1.0)
+T = datetime(2024, 1, 8, 15, 0, tzinfo=UTC)  # Monday 09:00 CT, far from the halt
+
+
+def signal(side: str = "long", entry: int = 100, stop: int = 90, target: int = 140) -> Signal:
+    return Signal(side, 0, T, entry, stop, target, f"{side}-0", f"{side}-0", 0, 0, 0, 0, 0, 0, 0)  # type: ignore[arg-type]
+
+
+def bar(o: int, h: int, lo: int, c: int, minute: int = 5) -> TickBar:
+    return TickBar(T + timedelta(minutes=minute), o, h, lo, c)
+
+
+def run(
+    sig: Signal,
+    minutes: Sequence[TickBar],
+    cfg: ExecutionConfig | None = None,
+    five: TickBar | None = None,
+) -> tuple[list[Trade], SimBroker, EventLog]:
+    log = EventLog()
+    broker = SimBroker(INST, cfg or ExecutionConfig(), log)
+    broker.submit([sig], bar(100, 100, 100, 100, minute=0))
+    five = five or TickBar(
+        minutes[0].ts,
+        minutes[0].open,
+        max(m.high for m in minutes),
+        min(m.low for m in minutes),
+        minutes[-1].close,
+    )
+    return broker.on_bar(five, minutes), broker, log
+
+
+def test_take_profit_net_and_gross_r() -> None:
+    (t,), _, _ = run(signal(), [bar(100, 141, 99, 140)])
+    assert (t.exit_reason, t.entry_fill, t.exit_fill, t.qty) == ("tp", 101, 140, 1.0)
+    assert t.gross_r == pytest.approx(4.0)
+    # pnl = (140 - 101) * 10 - 2 * 1 = 388 USD on 100 USD risk
+    assert t.net_r == pytest.approx(3.88)
+    assert t.cost_r == pytest.approx(0.12)
+    assert t.mfe_r == pytest.approx(4.0)
+
+
+def test_stop_loss_with_slippage() -> None:
+    (t,), _, _ = run(signal(), [bar(100, 105, 89, 92)])
+    assert (t.exit_reason, t.exit_raw, t.exit_fill) == ("sl", 90, 89)
+    assert t.net_r == pytest.approx(-1.22)  # (89 - 101) * 10 - 2 = -122
+    assert t.mae_r == pytest.approx(1.0)
+
+
+def test_stop_and_target_in_same_minute_assumes_stop() -> None:
+    # Scenario 15
+    (t,), _, _ = run(signal(), [bar(100, 141, 89, 120)])
+    assert t.exit_reason == "sl"
+
+
+def test_minutes_decide_the_order_inside_a_five_minute_bar() -> None:
+    minutes = [bar(100, 141, 99, 139, minute=1), bar(139, 139, 85, 86, minute=2)]
+    (t,), _, _ = run(signal(), minutes)
+    assert t.exit_reason == "tp"
+
+
+def test_gap_through_stop_fills_at_open() -> None:
+    (t,), _, _ = run(signal(), [bar(80, 85, 78, 84)])
+    assert (t.exit_reason, t.exit_raw, t.exit_fill) == ("sl", 80, 79)
+
+
+def test_gap_through_target_fills_at_target() -> None:
+    (t,), _, _ = run(signal(), [bar(150, 151, 149, 150)])
+    assert (t.exit_reason, t.exit_fill) == ("tp", 140)
+
+
+def test_short_trade_is_mirrored() -> None:
+    (t,), _, _ = run(signal("short", 100, 110, 60), [bar(100, 101, 59, 60)])
+    assert (t.exit_reason, t.entry_fill, t.exit_fill) == ("tp", 99, 60)
+    assert t.net_r == pytest.approx(3.88)
+    (t,), _, _ = run(signal("short", 100, 110, 60), [bar(100, 111, 95, 108)])
+    assert (t.exit_reason, t.exit_fill) == ("sl", 111)
+
+
+def test_position_stays_open_without_hit() -> None:
+    trades, broker, _ = run(signal(), [bar(100, 110, 95, 105)])
+    assert trades == [] and len(broker.positions) == 1
+
+
+def test_flat_before_break() -> None:
+    # Scenario 16: the 5-minute bar 15:55-16:00 CT closes every open position.
+    last = TickBar(datetime(2024, 1, 8, 21, 55, tzinfo=UTC), 100, 110, 95, 105)
+    (t,), _, _ = run(signal(), [last], five=last)
+    assert (t.exit_reason, t.exit_raw, t.exit_fill) == ("flat_break", 105, 104)
+
+
+def test_no_entry_on_last_bar_before_break() -> None:
+    log = EventLog()
+    broker = SimBroker(INST, ExecutionConfig(), log)
+    broker.submit([signal()], TickBar(datetime(2024, 1, 8, 21, 55, tzinfo=UTC), 100, 100, 100, 100))
+    assert broker.positions == [] and "entry_before_break" in log.kinds()
+
+
+def test_realistic_sizing_rounds_down_and_skips_zero() -> None:
+    cfg = ExecutionConfig(sizing="realistic", risk_usd=250.0)
+    _, broker, _ = run(signal(), [bar(100, 110, 95, 105)], cfg)
+    assert broker.positions[0].qty == 2.0  # 250 / (10 ticks * 10 USD) = 2.5 -> 2
+    _, broker, log = run(signal(), [bar(100, 110, 95, 105)], replace(cfg, risk_usd=50.0))
+    assert broker.positions == [] and "qty_zero" in log.kinds()
+
+
+def test_session_window_and_max_positions() -> None:
+    cfg = ExecutionConfig(session_window=(time(8, 0), time(9, 0)))  # T is 16:00 Berlin
+    _, broker, log = run(signal(), [bar(100, 110, 95, 105)], cfg)
+    assert broker.positions == [] and "entry_outside_session" in log.kinds()
+    log = EventLog()
+    broker = SimBroker(INST, ExecutionConfig(max_open_positions=1), log)
+    broker.submit([signal(), replace(signal(), setup_id="long-1")], bar(100, 100, 100, 100, 0))
+    assert len(broker.positions) == 1 and "max_open_positions" in log.kinds()
+
+
+def test_close_all_at_end_of_data() -> None:
+    _, broker, _ = run(signal(), [bar(100, 110, 95, 105)])
+    (t,) = broker.close_all(bar(105, 106, 104, 106, minute=10))
+    assert (t.exit_reason, t.exit_fill) == ("end_of_data", 105)
