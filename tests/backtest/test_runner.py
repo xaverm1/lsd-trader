@@ -120,3 +120,23 @@ def test_reclaim_needs_the_tap_bar_to_have_closed() -> None:
     cfg = StrategyConfig(entry_mode="reclaim_1m")
     result = run_backtest(INST, FULL_LONG[:16], None, cfg)
     assert [t for t in result.trades if t.side == "long"] == []
+
+
+def test_sweep_tap_and_cisd_entry_inside_one_bar() -> None:
+    # Bar 15 of FULL_LONG as minutes: after a bullish minute, a bearish run from 116 sweeps P'
+    # 113 and taps the zone top 111 (low 110). Minute 3 closes above P' (114) but not above the
+    # CISD level (116, the open of the bearish run): no entry. Minute 4 closes at 117: entry.
+    t = FULL_LONG[15].ts
+    mins = [
+        TickBar(t, 115, 117, 114, 116),  # bullish: ends the bearish run of bar 14
+        TickBar(t + timedelta(minutes=1), 116, 116, 112, 112),  # run opens at 116, sweep of 113
+        TickBar(t + timedelta(minutes=2), 112, 112, 110, 110),  # tap of 111, low 110
+        TickBar(t + timedelta(minutes=3), 110, 114, 110, 114),  # above P', below CISD
+        TickBar(t + timedelta(minutes=4), 114, 117, 113, 117),  # CISD -> entry
+    ]
+    bar = TickBar(t, 115, 117, 110, 117)
+    cfg = StrategyConfig(entry_mode="sweep_1m_cisd")
+    result = run_backtest(INST, FULL_LONG[:15] + [bar], {t: mins}, cfg)
+    (tr,) = [x for x in result.trades if x.side == "long"]
+    assert (tr.entry_signal, tr.stop, tr.entry_ts) == (117, 110, mins[4].ts)
+    assert (tr.sweep_idx, tr.tap_idx) == (15, 15)

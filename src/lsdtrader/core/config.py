@@ -29,7 +29,10 @@ class StrategyConfig:
     max_trades_per_zone: int = 1
     # "bar": entry on the close of a strategy bar (Spec §7). "reclaim_1m": after a tap bar has
     # closed, entry on the close of the first 1-minute bar back beyond the swept liquidity.
-    entry_mode: Literal["bar", "reclaim_1m"] = "bar"
+    # "sweep_1m_cisd": zones and liquidity from the strategy bars, but sweep, tap and entry on
+    # 1-minute bars; entry on the first minute after the tap that closes beyond the swept
+    # liquidity and beyond the CISD level.
+    entry_mode: Literal["bar", "reclaim_1m", "sweep_1m_cisd"] = "bar"
 
     def __post_init__(self) -> None:
         if self.piv_len < 1:

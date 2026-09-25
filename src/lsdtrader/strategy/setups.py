@@ -22,6 +22,8 @@ class Setup:
     sweep_idx: int
     atr: float | None
     tap_idx: int | None = None
+    low: int | None = None  # sweep_1m_cisd: lowest low since the sweep
+    cisd: int | None = None  # sweep_1m_cisd: open of the bearish run that made `low`
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +97,14 @@ class SetupTracker:
         if z.state != "left":
             self._log.emit("setup_zone_gone", setup_id=s.setup_id, zone_state=z.state)
             return False
+        if cfg.entry_mode == "sweep_1m_cisd":  # tap and entry happen in on_minute
+            if s.tap_idx is None and i - s.sweep_idx >= cfg.max_bars_sweep_to_tap:
+                self._log.emit("no_tap", setup_id=s.setup_id)
+                return False
+            if s.tap_idx is not None and i - s.tap_idx >= cfg.max_bars_tap_to_entry:
+                self._log.emit("no_entry", setup_id=s.setup_id)
+                return False
+            return True
         if s.tap_idx is None:
             if bar.low <= z.top + cfg.tap_tol_ticks:
                 s.tap_idx = i
@@ -137,6 +147,35 @@ class SetupTracker:
                 keep.append(s)
             else:
                 entries.append(entry)
+        self._pending = keep
+        return entries
+
+    def on_minute(self, bars: Sequence[TickBar], m: TickBar, run_open: int | None) -> list[Entry]:
+        """sweep_1m_cisd: advance setups by one minute of the strategy bar that will get index
+        len(bars). `run_open` is the open of the latest run of bearish minutes (incl. `m`).
+
+        CISD (change in state of delivery, bullish): a close above the open of the run of
+        consecutive bearish candles that made the low. Entry on the first minute after the
+        tap (the tapping minute included) that closes above both P' and that level.
+        """
+        i = len(bars)
+        entries: list[Entry] = []
+        keep: list[Setup] = []
+        for s in self._pending:
+            z = s.zone
+            if z.state == "left":
+                if s.low is None or m.low < s.low:
+                    s.low, s.cisd = m.low, run_open
+                if s.tap_idx is None and m.low <= z.top + self._cfg.tap_tol_ticks:
+                    s.tap_idx = i
+                    self._log.emit("tap", setup_id=s.setup_id)
+                level = max(s.liq.price, s.cisd if s.cisd is not None else s.liq.price)
+                if s.tap_idx is not None and m.close > level:
+                    entry = self._enter(bars, s, i, m.close, s.low, m.ts)
+                    entry.features["cisd_level"] = s.cisd  # side space: negated for shorts
+                    entries.append(entry)
+                    continue
+            keep.append(s)
         self._pending = keep
         return entries
 

@@ -75,25 +75,33 @@ class SideEngine:
         self.trends = {n: TrendTracker(n) for n in TREND_PIVOTS}
         self.levels = {n: LevelBook(n) for n in LEVEL_PIVOTS}
         self._trend_state: dict[int, int] = {n: 0 for n in TREND_PIVOTS}
+        self._last_atr: float | None = None
+        self._run_open: int | None = None  # open of the latest run of bearish minutes
+        self._bearish_run = False
 
     def on_bar(self, bar: TickBar, minutes: Sequence[TickBar] | None = None) -> list[Entry]:
         """`minutes` (this bar's 1-minute bars, same side) feed reclaim entries."""
         early: list[Entry] = []
+        by_minute = self.cfg.entry_mode == "sweep_1m_cisd" and bool(minutes)
         if self.cfg.entry_mode == "reclaim_1m" and minutes:
             early = self.setups.minute_entries(self.bars, minutes)
-            for e in early:
-                e.features.update(self._context(e, self._trend_state))
+        elif by_minute:
+            assert minutes is not None
+            early = self._minutes(minutes)
+        for e in early:
+            e.features.update(self._context(e, self._trend_state))
         self.bars.append(bar)
         i = len(self.bars) - 1
         self.log.bar_index = i
         atr = self._atr.update(bar)
+        self._last_atr = atr
         self.zones.update(self.bars)
         swing = confirmed_swing_low(self.bars, self.cfg.piv_len)
         for bos in self.structure.update(self.bars, swing):
             self.log.emit("bos", p_idx=bos.p_idx, bos_idx=bos.bos_idx, h2=bos.h2)
             self.zones.create(self.bars, bos)
             self.liquidity.add(bos)
-        for liq in self.liquidity.swept_by(bar):
+        for liq in [] if by_minute else self.liquidity.swept_by(bar):
             zones, reason = match_zones(liq, self.zones.live(), atr, self.cfg)
             if reason is not None:
                 self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
@@ -110,6 +118,27 @@ class SideEngine:
         # an untraded touch by an opposing bar moves a left zone (Spec §5.2 amendment)
         running = {s.zone.zone_id for s in self.setups.pending}
         self.zones.relocate_touched(self.bars, running)
+        return entries
+
+    def _minutes(self, minutes: Sequence[TickBar]) -> list[Entry]:
+        """sweep_1m_cisd: sweeps, taps and entries inside the coming strategy bar."""
+        i = len(self.bars)
+        self.log.bar_index = i
+        entries: list[Entry] = []
+        for m in minutes:
+            if m.close < m.open:
+                if not self._bearish_run:
+                    self._run_open = m.open
+                self._bearish_run = True
+            else:
+                self._bearish_run = False
+            for liq in self.liquidity.swept_by(m):
+                zones, reason = match_zones(liq, self.zones.live(), self._last_atr, self.cfg)
+                if reason is not None:
+                    self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
+                for z in zones:
+                    self.setups.start(z, liq, i, self._last_atr)
+            entries += self.setups.on_minute(self.bars, m, self._run_open)
         return entries
 
     def _context(self, e: Entry, trend: dict[int, int]) -> dict[str, object]:

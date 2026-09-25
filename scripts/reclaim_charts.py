@@ -50,32 +50,39 @@ for k, t in enumerate(sorted(picked, key=lambda t: t["entry_ts"])):
     ctx = render(trade_spec(t, times, inst, bars), bars, inst, out_dir / f"{k:02d}_context.png")
     side, won = t["side"], t["net_r"] > 0
     tap_start = times[t["tap_idx"]]
-    first = minute_idx(tap_start) - 15
     entry_m = minute_idx(t["entry_ts"])
     exit_m = minute_idx(t["exit_ts"])
+    cisd = t.get("feat_cisd_level")
+    minute_mode = cisd is not None
+    first = entry_m - 60 if minute_mode else minute_idx(tap_start) - 15
     last = min(entry_m + 30, exit_m + 5) if exit_m > entry_m else entry_m + 30
     last = min(last, first + 240)
-    pre = [m for m in minutes[first:entry_m] if m.ts >= tap_start + bar_len]
+    levels = [Level(first, last, t["liq_level"], LIQ, "swept liquidity P'", ":")]
+    if minute_mode:
+        levels.append(
+            Level(first, last, cisd if side == "long" else -cisd, INK, "CISD level", "--")
+        )
     spec = ChartSpec(
         first=first,
         last=last,
         title=f"{side.upper()} {t['setup_id']} - 1-minute entry detail - entry {berlin_label(t['entry_ts'])} Berlin",
         boxes=[Box(first, last, t["zone_top"], t["zone_bot"], ZONE, "zone")],
-        levels=[Level(first, last, t["liq_level"], LIQ, "swept liquidity P'", ":")],
+        levels=levels,
         position=Position(entry_m, min(exit_m, last), t["entry_signal"], t["stop"], t["target"]),
         markers=[
-            Marker(entry_m, t["entry_signal"], "reclaim close = entry", INK, ">"),
+            Marker(entry_m, t["entry_signal"], "entry (close)", INK, ">"),
             Marker(exit_m, t["exit_raw"], f"exit ({t['exit_reason']})", WIN if won else LOSS, "X"),
         ],
         info=[
-            f"tap bar {berlin_label(tap_start)} (+{bar_len.seconds // 60} min)",
-            f"minutes checked before entry: {len(pre)}",
+            f"strategy bar of the tap {berlin_label(tap_start)}",
             f"entry {inst.to_price(t['entry_signal'])}  P' {inst.to_price(t['liq_level'])}",
             f"stop  {inst.to_price(t['stop'])}  target {inst.to_price(t['target'])}",
             f"result {t['gross_r']:+.2f}R gross",
         ],
-        vline=minute_idx(tap_start + bar_len),
-        notes=["dashed line: close of the tap bar - reclaim minutes count only after it"],
+        vline=None if minute_mode else minute_idx(tap_start + bar_len),
+        notes=[]
+        if minute_mode
+        else ["dashed line: close of the tap bar - reclaim minutes count only after it"],
     )
     det = render(spec, minutes, inst, out_dir / f"{k:02d}_detail.png")
     imgs = "".join(
