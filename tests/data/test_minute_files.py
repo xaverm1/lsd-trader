@@ -6,6 +6,7 @@ import pytest
 
 from lsdtrader.core.instrument import get_instrument
 from lsdtrader.data.minute_files import (
+    histdata_clock,
     histdata_symbol,
     load_minute_files,
     read_dukascopy_csv,
@@ -38,6 +39,31 @@ def test_histdata_clock_is_berlin_time_minus_six_hours(tmp_path: Path) -> None:
         datetime(2020, 3, 31, 20, 14, tzinfo=UTC),
         datetime(2020, 10, 28, 20, 14, tzinfo=UTC),
     ]
+
+
+def test_histdata_files_before_2019_use_new_york_clock(tmp_path: Path) -> None:
+    # Verified on XAUUSD 2009-2025: up to 2018 the daily reopen is stamped 18:00/18:01 in every
+    # week, also where US and EU daylight saving differ (file = New York time); from 2019 it is
+    # stamped 17:00 in those weeks (file = Berlin - 6 h). Non-farm payrolls (08:30 New York)
+    # confirm it: 2018-11-02 at 08:30 in the file, 2019-11-01 at 07:30.
+    rows = [
+        "20180115 180100;1;1;1;1;0",  # winter: both clocks agree (UTC-5)
+        "20180313 180100;1;1;1;1;0",  # US summer, EU winter: New York clock -> UTC-4
+        "20180702 180100;1;1;1;1;0",  # both summer: both clocks agree (UTC-4)
+        "20181102 083000;1;1;1;1;0",  # EU winter, US still summer -> UTC-4
+    ]
+    bars = read_histdata_zip(histdata_zip(tmp_path / "a.zip", rows, "XAUUSD", 2018), SPX)
+    assert [b.ts for b in bars] == [
+        datetime(2018, 1, 15, 23, 1, tzinfo=UTC),
+        datetime(2018, 3, 13, 22, 1, tzinfo=UTC),
+        datetime(2018, 7, 2, 22, 1, tzinfo=UTC),
+        datetime(2018, 11, 2, 12, 30, tzinfo=UTC),
+    ]
+
+
+def test_histdata_clock_by_year() -> None:
+    assert histdata_clock(2009) == histdata_clock(2018) == "America/New_York"
+    assert histdata_clock(2019) == histdata_clock(2026) == "Europe/Berlin - 6 h"
 
 
 def test_histdata_symbol_from_zip(tmp_path: Path) -> None:

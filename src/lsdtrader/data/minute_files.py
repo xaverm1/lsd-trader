@@ -1,9 +1,8 @@
 """Loaders for 1-minute bar files: HistData.com ASCII zips and Dukascopy CSV exports.
 
 HistData:  zip containing DAT_ASCII_<SYMBOL>_M1_<YEAR>.csv, rows `YYYYMMDD HHMMSS;O;H;L;C;V`,
-           bid prices. The file clock is Europe/Berlin time minus 6 hours: UTC-5 in
-           European winter, UTC-4 in European summer (verified on SPXUSD 2020 against
-           the daily 16:14 New York halt).
+           bid prices. The file clock depends on the year (see `histdata_clock`); the two
+           clocks differ only in the weeks where US and EU daylight saving differ.
 Dukascopy: CSV with header `Etc/UTC,Open,High,Low,Close,Volume`, ISO timestamps in UTC.
 Both return 1-minute TickBars in UTC. `load_minute_files` merges files, sorts, and drops
 repeated timestamps, returning how many it dropped so the data report can show it.
@@ -23,8 +22,27 @@ from lsdtrader.core.bar import TickBar
 from lsdtrader.core.instrument import Instrument
 
 BERLIN = ZoneInfo("Europe/Berlin")
-HISTDATA_SHIFT = timedelta(hours=6)  # file clock = Berlin time - 6 h
-HISTDATA_NAME = re.compile(r"DAT_ASCII_([A-Z0-9]+)_M1_\d{4,6}\.csv$", re.IGNORECASE)
+NEW_YORK = ZoneInfo("America/New_York")
+HISTDATA_SHIFT = timedelta(hours=6)  # 2019+: file clock = Berlin time - 6 h
+# Up to 2018 the file clock is New York local time (UTC-5 / UTC-4 with US daylight saving).
+# Verified on XAUUSD 2009-2025: up to 2018 the CME reopen is stamped 18:00/18:01 also in the
+# US/EU daylight-saving mismatch weeks, from 2019 it is stamped 17:00 there (SPXUSD 2020: the
+# 16:14 New York halt shows as 15:14); payrolls at 08:30 New York sit at 08:30 in the 2018
+# file and at 07:30 in the 2019 file. `lsd data-report` re-checks this for every load.
+LAST_NEW_YORK_CLOCK_YEAR = 2018
+HISTDATA_NAME = re.compile(r"DAT_ASCII_([A-Z0-9]+)_M1_(\d{4})\d{0,2}\.csv$", re.IGNORECASE)
+
+
+def histdata_clock(year: int) -> str:
+    """Clock of a HistData file of this year."""
+    return "America/New_York" if year <= LAST_NEW_YORK_CLOCK_YEAR else "Europe/Berlin - 6 h"
+
+
+def histdata_to_utc(stamp: datetime, year: int) -> datetime:
+    """UTC time of a naive HistData file stamp."""
+    if year <= LAST_NEW_YORK_CLOCK_YEAR:
+        return stamp.replace(tzinfo=NEW_YORK).astimezone(UTC)
+    return (stamp + HISTDATA_SHIFT).replace(tzinfo=BERLIN).astimezone(UTC)
 
 
 def histdata_symbol(path: Path) -> str:
@@ -45,13 +63,16 @@ def read_histdata_zip(path: Path, inst: Instrument) -> list[TickBar]:
     with zipfile.ZipFile(path) as z:
         (name,) = [n for n in z.namelist() if HISTDATA_NAME.search(n)]
         text = z.read(name).decode("ascii")
+    m = HISTDATA_NAME.search(name)
+    assert m is not None
+    year = int(m.group(2))
     bars = []
     for line in text.splitlines():
         if not line.strip():
             continue
         stamp, o, h, lo, c, _vol = line.split(";")
-        berlin = (datetime.strptime(stamp, "%Y%m%d %H%M%S") + HISTDATA_SHIFT).replace(tzinfo=BERLIN)
-        bars.append(_bar(inst, berlin.astimezone(UTC), o, h, lo, c))
+        ts = histdata_to_utc(datetime.strptime(stamp, "%Y%m%d %H%M%S"), year)
+        bars.append(_bar(inst, ts, o, h, lo, c))
     return bars
 
 

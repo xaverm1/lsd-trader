@@ -52,3 +52,36 @@ def test_report_classifies_gaps_breaks_and_jumps() -> None:
 def test_report_of_nothing() -> None:
     report = build_report(get_instrument("SPXUSD"), [])
     assert report.n_minutes == 0 and report.first is None
+
+
+def reopen_days(first_utc: datetime, days: int) -> list[TickBar]:
+    """A bar every 10 minutes for 22:50 h after each daily reopen, then a 69-minute pause."""
+    return [
+        TickBar(first_utc + timedelta(days=d, minutes=10 * k), 1, 1, 1, 1)
+        for d in range(days)
+        for k in range(138)
+    ]
+
+
+def test_report_checks_the_reopen_in_dst_mismatch_weeks() -> None:
+    # 2018-03-12..15: US summer, EU winter. The CME reopen is 18:00 New York = 22:00 UTC.
+    good = build_report(
+        get_instrument("XAUUSD"), reopen_days(datetime(2018, 3, 12, 22, tzinfo=UTC), 5)
+    )
+    assert (good.dst_reopens_ok, good.dst_reopens) == (4, 4)
+    assert "4 of 4 reopens at 18:00-18:05 New York" in good.to_markdown()
+    assert "WARNING" not in good.to_markdown()
+    # Same days read with the wrong clock: reopen shown at 19:00 New York.
+    bad = build_report(
+        get_instrument("XAUUSD"), reopen_days(datetime(2018, 3, 12, 23, tzinfo=UTC), 5)
+    )
+    assert (bad.dst_reopens_ok, bad.dst_reopens) == (0, 4)
+    assert "WARNING" in bad.to_markdown()
+
+
+def test_report_without_dst_mismatch_week_says_so() -> None:
+    report = build_report(
+        get_instrument("XAUUSD"), reopen_days(datetime(2018, 7, 2, 22, tzinfo=UTC), 2)
+    )
+    assert report.dst_reopens == 0
+    assert "no reopen in a DST-mismatch week" in report.to_markdown()

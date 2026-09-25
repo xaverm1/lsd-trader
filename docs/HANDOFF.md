@@ -14,8 +14,8 @@ XAUUSD 2009-2014 were added to the data repo on 2026-09-25 (2009 starts 2009-03-
 has no earlier gold year). They are not assigned to any split yet and have not been
 backtested; Xaver decides their use. Data reports: the daily halt often starts at 17:15 New
 York (old COMEX schedule) and ends at 18:00; 2009-2012 have 34-41 holes >= 15 min outside
-halts per year (2014-2015: 6-10); the same US/EU DST-mismatch weeks as 2015 look shifted by
-one hour (reopen shown at 19:00 New York).
+halts per year (2014-2015: 6-10). The one-hour shift in the US/EU DST-mismatch weeks is fixed
+(see "Clock / daylight saving" below).
 If the clone fails in the cloud, attach `xaverm1/lsd-trader-data` to the session, clone it
 next to this repo and link it: `ln -s ../lsd-trader-data data`.
 
@@ -32,8 +32,22 @@ All testing and optimization happens on **gold (XAUUSD)**.
 | 2022-2023 | validate only what survived optimization (2023 has ~600 data holes) |
 | 2024-2025 | LOCKED holdout, touched exactly once at the very end |
 
-Pre-2019 files end the daily halt at 17:01 CT (data report flags it; harmless) and some
-DST-mismatch weeks may look shifted by one hour, which matters only for time-of-day filters.
+Pre-2019 files end the daily halt at 17:01 CT (data report flags it; harmless).
+
+### Clock / daylight saving (fixed 2026-09-25)
+
+HistData files up to 2018 are stamped in New York local time, from 2019 in Berlin time - 6 h.
+Both clocks agree except in the 3-4 weeks a year where US and EU daylight saving differ; the
+loader used Berlin - 6 h for all years, so in those weeks 2009-2018 bars were one hour late.
+Evidence (XAUUSD 2009-2025): the reopen is stamped 18:00/18:01 in every week up to 2018 and
+17:00 in the mismatch weeks from 2019; payrolls (08:30 NY) sit at 08:30 in the 2012/2018
+files and 07:30 in 2019/2024. The loader now picks the clock by year
+(`histdata_clock`), and `lsd data-report` prints a **Clock check** line: how many reopens in
+mismatch weeks fall at 18:00-18:05 New York, with a WARNING if fewer than half do (old
+loader: 0 of 15-20 in every year up to 2018; now 9/14 to 20/20 in every year, the misses are
+ragged old reopens at 17:45-17:59 or late ones after 18:05, none shifted by an hour). Check that line
+for every new file. Effect on the gold baseline 2015-2021 (no costs): 6736 -> 6737 trades,
++276 R -> +264 R (+0.041 -> +0.039 R/trade); results below marked (old clock) predate this.
 
 ## Next task: zone age
 
@@ -76,7 +90,7 @@ Same run reproduced exactly (6736 trades, -2162.5 R). `scripts/stop_size.py`:
 ### Spread off (decided by Xaver 2026-09-25)
 
 XAUUSD spread is now 0 (no costs at all on gold): the rules are developed cost-free and
-costs are judged later on futures data. Zero-spread 2015-2021 = old gross: +0.041 R/trade,
+costs are judged later on futures data. Zero-spread 2015-2021 = old gross (old clock): +0.041 R/trade,
 +276 R, t=1.73; shorts +0.069 (t=2.0), longs +0.012; 2020 and 2021 negative.
 Keep in mind when judging a change: GC costs ~ $0.35/oz / stop in R (~0.4 R at the $0.90
 median stop), and the short-side bid-bar bias above still inflates short results.
@@ -84,12 +98,13 @@ median stop), and the short-side bid-bar bias above still inflates short results
 ### Hour of day (gold 2015-2021, no costs, `scripts/hour_of_day.py`)
 
 Picture: `docs/results/hour_of_day_gold_2015-2021.png`. No single hour reaches |t| >= 2 (24
-tests; one would be expected by chance). Best 09-10 Berlin (+0.19 R/T, N=373, t=1.8, both
+tests; one would be expected by chance). Old clock: best 09-10 Berlin (+0.19 R/T, N=373, t=1.8, both
 halves positive), worst 04-05 (-0.15, N=164) and 18-19 (-0.15, N=182, sign flips between
 halves). Session blocks (fixed by convention, not by the result): London 08-14 +0.085 R/T
 (N=1952, t=1.8, both halves +), Asia 00-08 +0.048, NY overlap 14-18 +0.022,
 NY afternoon 18-24 -0.027. No time filter adopted; a session filter would be a hypothesis
-for 2022-2023, not a finding. DST-mismatch weeks before 2019 may shift single hours.
+for 2022-2023, not a finding. Rerun with the fixed clock (picture updated): same picture,
+09-10 +0.21 R/T (N=381, t=1.9), 04-05 -0.17 (N=166), 18-19 -0.14 (N=185); still no |t| >= 2.
 
 ## Working rules
 

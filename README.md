@@ -22,7 +22,8 @@ The engine reads 1-minute bars and builds 5-minute bars from them; the broker re
 and targets on the 1-minute bars.
 
 - **HistData.com** ASCII 1-minute zips (free CFD data: SPX/USD, NSX/USD, XAU/USD, XAG/USD,
-  WTI/USD). Timestamps are EST without daylight saving and are converted to UTC.
+  WTI/USD). Timestamps are New York time up to 2018 and Berlin time - 6 h from 2019; both
+  are converted to UTC. `lsd data-report` shows a clock check for the daylight-saving weeks.
 - **Dukascopy** CSV exports (header `Etc/UTC,...`); pass `--instrument`, e.g. `USA500.IDX/USD`.
 - **TradingView** JSON chart exports (5-minute bars only).
 
