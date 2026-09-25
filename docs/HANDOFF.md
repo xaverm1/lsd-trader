@@ -220,6 +220,18 @@ sits at the sweep/tap wick. 30m TP6 is best (-0.06 net) but carried by 2015-2017
 on any of these bar lengths. On 5m, holding overnight is slightly worse than the 15:10 CT
 flat (+0.039 vs +0.047 R/T gross).
 
+### 15m zones, 1-minute reclaim entry (Xaver's idea, 2026-09-25)
+
+`--timeframe 15 --hold-overnight --set entry_mode=reclaim_1m`: after the 15m tap bar has
+closed (zone intact), entry on the close of the first 1-minute bar back above the swept
+liquidity (below for shorts), within 3 bars; stop = lowest low since the sweep, to the minute.
+Gold 2015-2021: 1740 trades (249/yr), median stop $1.62 (same as the 15m bar entry, $1.65),
+gross TP4 +0.008 R/T (t 0.2), TP6 +0.004; every TP from 0.5 to 10 R between -0.09 and +0.03.
+After GC costs (0.29 R) -0.29 R/T. Worse than the 15m bar entry (+0.077 gross at TP4). 85 % of
+entries come in the first 15m bar after the tap; the entry sits a median $0.28 above the
+liquidity. (The "no TP" row, +0.61 R/T at 0.8 % winners, is a handful of multi-day runners
+while holding overnight, not an edge.)
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
