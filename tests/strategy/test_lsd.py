@@ -72,3 +72,41 @@ def test_open_liquidity_is_visible_for_inspection() -> None:
     for bar in FULL_LONG[:14]:
         strat.on_bar(bar)
     assert [liq.price for liq in strat.long.liquidity.open] == [106, 113]
+
+
+def test_untraded_touch_after_leaving_moves_the_zone() -> None:
+    # Bar 10 becomes a bearish bar whose wick touches the zone top (111) with no liquidity
+    # swept: the zone moves onto bar 10, so the original zone [106, 111] never trades.
+    bars = (
+        FULL_LONG[:10]
+        + make_bars((120, 122, 111, 117), start=10)
+        + [TickBar(b.ts, b.open, b.high, b.low, b.close) for b in FULL_LONG[11:]]
+    )
+    strat = LsdStrategy()
+    signals = [s for bar in bars for s in strat.on_bar(bar)]
+    assert not [s for s in signals if (s.zone_top, s.zone_bot) == (111, 106)]
+    relocations = [
+        e for e in strat.drain_events() if e.kind == "zone_relocation" and e.side == "long"
+    ]
+    assert any(e.bar_index == 10 and e.detail["o_idx"] == 10 for e in relocations)
+
+
+def test_sweep_and_tap_on_the_same_bar_still_trades() -> None:
+    # FULL_LONG bar 15 is bearish and touches the zone, but it also sweeps P': it is the tap.
+    (sig,) = [s for s in run(FULL_LONG) if s.side == "long"]
+    assert (sig.zone_top, sig.zone_bot, sig.tap_idx) == (111, 106, 15)
+
+
+def test_a_tap_bar_can_become_a_new_zone() -> None:
+    # Xaver: a tap can itself become a zone when all criteria are met. In FULL_LONG the tap
+    # bar 15 is bearish and overlaps the still-building zone of P' (origin 11), which
+    # relocates onto it; the BOS from the swing low at bar 15 (close 130 > H2 124 on bar 18)
+    # then finds that zone already there instead of creating a copy.
+    bars = FULL_LONG + make_bars((114, 120, 113, 119), (119, 131, 118, 130), start=17)
+    strat = LsdStrategy()
+    for bar in bars:
+        strat.on_bar(bar)
+    (zone,) = [z for z in strat.long.zones.history if z.o_idx == 15]
+    assert zone.state == "left"  # a live zone on the tap bar, ready for a later setup
+    kinds = [(e.bar_index, e.kind) for e in strat.drain_events() if e.side == "long"]
+    assert (18, "bos") in kinds and (18, "zone_duplicate") in kinds

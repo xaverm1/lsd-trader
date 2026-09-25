@@ -84,6 +84,23 @@ class ZoneBook:
                 self._mark_end(z, k)
         self._zones = [z for z in self._zones if z.live]
 
+    def relocate_touched(self, bars: Sequence[TickBar], running: set[int]) -> None:
+        """Relocation after a zone was left (Strategy Spec §5.2 amendment).
+
+        Call after setups have been processed for the newest bar: an opposing bar touching a
+        left zone moves the zone onto it, unless a setup is running for that zone (then the
+        touch is a tap). Destruction has already been applied by `update`.
+        """
+        k = len(bars) - 1
+        bar = bars[k]
+        if not is_opposing(bar, self._cfg.doji_tol_ticks):
+            return
+        for z in self._zones:
+            if z.state == "left" and z.zone_id not in running and z.overlaps(bar):
+                if self._relocate(z, k, bar):
+                    z.state = "building"
+                self._mark_end(z, k)
+
     def consume(self, zone: Zone) -> None:
         zone.trades += 1
         if zone.trades >= self._cfg.max_trades_per_zone:
@@ -138,19 +155,24 @@ class ZoneBook:
         else:
             self._destroy_step(bars[k], z)
 
+    def _relocate(self, z: Zone, k: int, bar: TickBar) -> bool:
+        """Move the zone onto bar k; False (zone dead) if another zone already starts there."""
+        if k in self._origins:
+            # Another zone already starts on this bar; moving here would copy it.
+            z.state = "dead"
+            self._log.emit("zone_duplicate", zone_id=z.zone_id, o_idx=k)
+            return False
+        self._origins.add(k)
+        z.o_idx, z.top, z.bot = k, bar.high, bar.low
+        z.kind, z.pending = "normal", True
+        self._log.emit("zone_relocation", zone_id=z.zone_id, o_idx=k)
+        return True
+
     def _build_step(self, bars: Sequence[TickBar], z: Zone, k: int) -> None:
         bar = bars[k]
         if is_opposing(bar, self._cfg.doji_tol_ticks) and z.overlaps(bar):
-            if k in self._origins:
-                # Another zone already starts on this bar; moving here would copy it.
-                z.state = "dead"
-                self._log.emit("zone_duplicate", zone_id=z.zone_id, o_idx=k)
+            if not self._relocate(z, k, bar):
                 return
-            self._origins.add(k)
-            z.o_idx, z.top, z.bot = k, bar.high, bar.low
-            self._origins.add(k)
-            z.kind, z.pending = "normal", True
-            self._log.emit("zone_relocation", zone_id=z.zone_id, o_idx=k)
         elif z.pending:
             self._fix_geometry(bars[z.o_idx], bar, z)
         if bar.close < z.bot:

@@ -209,3 +209,43 @@ def test_relocation_onto_another_zones_origin_drops_the_duplicate() -> None:
     assert b.o_idx == 1 and b.live
     assert a.state == "dead" and "zone_duplicate" in log.kinds()
     assert book.live() == [b]
+
+
+# Relocation after the zone was left (Strategy Spec §5.2 amendment, trade #137)
+TOUCH = (124, 124, 111, 118)  # bearish, wick touches top 112 of the LEFT zone [100, 112]
+
+
+def test_left_zone_relocates_onto_a_touching_opposing_bar() -> None:
+    (zone,), book, log = create(make_bars(*LEFT))
+    bars = make_bars(*LEFT, TOUCH)
+    book.update(bars)
+    assert zone.state == "left"  # close 118 above the zone: not destroyed
+    book.relocate_touched(bars, running=set())
+    assert (zone.o_idx, zone.state, zone.pending) == (3, "building", True)
+    assert (zone.top, zone.bot) == (124, 111)
+    assert "zone_relocation" in log.kinds()
+
+
+def test_running_setup_turns_the_touch_into_a_tap() -> None:
+    (zone,), book, _ = create(make_bars(*LEFT))
+    bars = make_bars(*LEFT, TOUCH)
+    book.update(bars)
+    book.relocate_touched(bars, running={zone.zone_id})
+    assert (zone.o_idx, zone.state) == (0, "left")
+
+
+def test_bullish_touch_does_not_relocate() -> None:
+    (zone,), book, _ = create(make_bars(*LEFT))
+    bars = make_bars(*LEFT, (111, 124, 111, 118))
+    book.update(bars)
+    book.relocate_touched(bars, running=set())
+    assert (zone.o_idx, zone.state) == (0, "left")
+
+
+def test_relocation_after_left_onto_another_origin_is_a_duplicate() -> None:
+    (zone,), book, log = create(make_bars(*LEFT))
+    bars = make_bars(*LEFT, TOUCH)
+    book.update(bars)
+    book.create(bars, bos_at(3, 3))  # another zone already starts on bar 3
+    book.relocate_touched(bars, running=set())
+    assert zone.state == "dead" and "zone_duplicate" in log.kinds()

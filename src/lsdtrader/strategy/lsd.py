@@ -84,7 +84,11 @@ class SideEngine:
                 self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
             for z in zones:
                 self.setups.start(z, liq, i, atr)
-        return self.setups.update(self.bars)
+        entries = self.setups.update(self.bars)
+        # an untraded touch by an opposing bar moves a left zone (Spec §5.2 amendment)
+        running = {s.zone.zone_id for s in self.setups.pending}
+        self.zones.relocate_touched(self.bars, running)
+        return entries
 
 
 class LsdStrategy:
