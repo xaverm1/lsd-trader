@@ -1,6 +1,6 @@
 # LSD 5min Strategy — Specification v1.0
 
-**Status:** draft for review · **Date:** 2026-09-25 · **Owner:** Xaver
+**Status:** approved 2026-09-25 · **Date:** 2026-09-25 · **Owner:** Xaver
 **Scope:** the mechanical trading rules only. Engine architecture, data, research and live execution are specified separately (sub-projects 2–6).
 
 This document is the single source of truth for the strategy. Code and tests are derived from it, never from the retired Pine script (`lsd-bot/old_lsd.pine`, `lsd-bot/lsd_bot.pine`) or the earlier `lsd-bot/SPEC.md`. Where this spec deviates from those, the deviation is listed in §10.
@@ -248,4 +248,4 @@ The nine RD Concepts trades from the video of 2026-09-03 (table in `lsd-bot/SPEC
 ## 12. Open items
 
 - Real commission per contract for the chosen prop firm / broker.
-- Golden-set confirmation (blocked on historical data).
+- Golden-set confirmation (blocked on historical data). Xaver will extend the set before it is tested. The golden set checks that the engine implements the rules as Xaver reads them; it is not evidence of an edge. To keep it a fair conformance test, new golden trades should be marked by applying the rules to a chart window chosen in advance — including setups that lost — not picked from memorable winners.
