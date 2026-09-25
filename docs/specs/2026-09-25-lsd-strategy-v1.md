@@ -144,7 +144,7 @@ Multiple P′ per zone are allowed; whichever is swept first starts the setup. I
 ## 7. Sweep → tap → entry (M5)
 
 - **Sweep:** a bar with `low < P′.low`.
-- **Tap:** a bar `t` with `sweepBar ≤ t ≤ sweepBar + maxBarsSweepToTap` (default 3) and `low ≤ Z.top + tapTolTicks × tick` (default tolerance **0**: touching the top edge is enough, stopping short is not). Sweep and tap may be the same bar.
+- **Tap:** a bar `t` with `sweepBar ≤ t ≤ sweepBar + maxBarsSweepToTap` (default **12** = one hour of 5-minute bars; amendment 2026-09-25, was 3 — Xaver: "after the sweep the zone can be taken for one hour") and `low ≤ Z.top + tapTolTicks × tick` (default tolerance **0**: touching the top edge is enough, stopping short is not). Sweep and tap may be the same bar.
 - **Entry:** the first bar `e` with `tapBar ≤ e ≤ tapBar + maxBarsTapToEntry` (default 3) that satisfies the entry trigger while Z is intact. Fill at `close[e]`.
   - Setting `entryTrigger`: `bullish` (**default**: `close > open`), `aboveTapHigh` (bullish and `close > high[tapBar]`), `aboveLiq` (bullish and `close > P′.low`), `minBody` (bullish with body ≥ `minBodyTicks`).
   - Because a close inside the zone destroys it (§5.4), a valid entry bar always closes above `Z.top`.
@@ -196,7 +196,7 @@ Trend filters, key-level / potential analysis, opposing zones, news filter, brea
 | `extraZones` | none | last, all |
 | `zoneKill` | closeInside | closeBeyond |
 | `liqMaxDistATR` | off | 0.5, 1, 2 |
-| `maxBarsSweepToTap` | 3 | 1–6 |
+| `maxBarsSweepToTap` | 12 (one hour) | 3, 6, 24 |
 | `tapTolTicks` | 0 | — |
 | `maxBarsTapToEntry` | 3 | 1–6 |
 | `entryTrigger` | bullish | aboveTapHigh, aboveLiq, minBody |
