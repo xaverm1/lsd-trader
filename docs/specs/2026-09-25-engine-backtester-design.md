@@ -1,6 +1,6 @@
 # Engine, Backtester & Data — Design (Sub-project 2)
 
-**Status:** draft for review · **Date:** 2026-09-25 · **Owner:** Xaver
+**Status:** approved 2026-09-25 · **Date:** 2026-09-25 · **Owner:** Xaver
 **Implements:** [LSD Strategy Spec v1.0](2026-09-25-lsd-strategy-v1.md)
 **Out of scope:** profitability verdict, out-of-sample / walk-forward methodology (sub-project 3), live data and paper trading (sub-project 4), dashboard (sub-project 5), real orders (sub-project 6).
 
