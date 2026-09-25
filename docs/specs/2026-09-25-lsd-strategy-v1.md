@@ -50,17 +50,17 @@ right (i = 1..n):  low[c+i] <= low[c]   → not a swing   (right side must be st
 ### 4.1 Definitions
 
 - **P** — a confirmed swing low that is a candidate to produce a BOS.
-- **L0(P)** — the most recent confirmed swing low before P with `L0.low < P.low` (**strictly** lower).
-- **H2(P)** — the highest high of all bars from L0 to P (inclusive). This is the start of the leg that ended in P.
+- **L0(P)** — the most recent confirmed swing low before P with `L0.low ≤ P.low` (at or below; an equal low counts, see rule 1).
+- **H2(P)** — the highest high of the bars **after** L0 up to and including P. This is the start of the leg that ended in P. L0's own bar is excluded because its high usually belongs to the leg down into L0, not to the bounce after it.
 
 ### 4.2 Rules
 
-1. **P must be a higher low.** If no L0 exists (no earlier swing low is strictly lower than P), P is **not a candidate**. Counter: `cand_no_lower_low`.
-   - An **equal low** (`P.low == previous swing low`) counts as a higher low: the previous swing is not strictly lower, so the search continues back to the next strictly lower swing.
+1. **P must be a higher low.** If no L0 exists (no earlier swing low is at or below P), P is **not a candidate**. Counter: `cand_no_lower_low`.
+   - An **equal low** (`P.low == previous swing low`) counts as a higher low, and that equal swing **is** L0. H2 is then the high of the bounce between the two equal lows (review decision A, 2026-09-25).
 2. **BOS:** the first bar after P whose `close > H2(P)` (one tick is enough).
    - Setting `bosConfirm`: `close` (default) or `wick` (`high > H2(P)`).
    - Bars between P and P's confirmation bar are included in the BOS check.
-3. **P dies** if any bar before the BOS has `low < P.low`. The new, lower swing becomes the next candidate with its own L0 and H2. Counter: `cand_undercut`.
+3. **P dies** if any bar before the BOS has `low < P.low`. If one bar both undercuts P and closes above H2, the undercut wins: P dies and that bar is no BOS for P. The new, lower swing becomes the next candidate with its own L0 and H2. Counter: `cand_undercut`.
    - Equivalent formulation: *at the moment of the BOS, P is the lowest swing low between H2 and the BOS bar.*
    - If the new low falls below L0, rule 1 is re-evaluated for it (typically a different L0 and a higher H2).
 4. **Optional time limit** `bosMaxBars` (default **off**): if no BOS occurs within that many bars after P, P expires. Counter: `cand_expired`.
@@ -209,7 +209,7 @@ The **defaults are the primary hypothesis**. Every variant tested is counted, an
 | Topic | Old | Now | Why |
 |---|---|---|---|
 | BOS reference | separate 3/3 pivot set, most recent ref-high before P | H2 = highest high between L0 and P | matches how the BOS is read on the chart; removes the confirmation-lag problem |
-| Higher-low requirement | none | P must be a higher low; no lower swing → no candidate | a lower low cannot be liquidity for a long |
+| Higher-low requirement | none | P must be a higher low (equal counts); no swing at or below → no candidate | a lower low cannot be liquidity for a long |
 | Accuracy bottom | `min(O.bodyBot, F.low)` | `min(O.low, F.low)` | the old rule cut O's lower wick and placed zones too high |
 | Activation / `buildMaxBars` | explicit activation + 30-bar build limit | build phase ends when zone is left; no bar limit | liquidity above the zone implies the zone was left |
 | Tap tolerance | 2 ticks | 0 ticks | a near miss is not a tap |
@@ -226,7 +226,7 @@ Each scenario becomes a hand-built bar fixture and a unit test. They correspond 
 1. **Swing equal lows:** three bars with identical lows → exactly one swing, on the rightmost bar.
 2. **H2 selection, uptrend:** leg L0 → H2 → l → h → P with `l > P` → BOS level is H2, not h.
 3. **No lower low:** P below every earlier swing low → no candidate, `cand_no_lower_low` += 1.
-4. **Equal low:** P == previous swing low → counts as higher low; H2 taken from the range starting at the next strictly lower swing.
+4. **Equal low:** P == previous swing low → counts as higher low; L0 is the equal swing and the BOS level is the bounce high between them.
 5. **P undercut:** price trades below P before BOS → P dies, new low becomes P, BOS over the same H2 is attributed to the new P.
 6. **Origin bar:** (a) P bearish → O = P; (b) P bullish, bar before bearish → O = bar before; (c) bearish pullback after P overlapping P's zone → relocation to the pullback.
 7. **Extra zones:** non-overlapping pullback between P and BOS → no extra zone under `none`, one under `last`, all under `all`.
