@@ -7,8 +7,17 @@ Read this first when picking the project up in a new (cloud) session.
     bash scripts/cloud_setup.sh
 
 Installs the package, clones the private data repo `xaverm1/lsd-trader-data` into `data/`
-(HistData 1-minute CFD files: XAUUSD 2015-2025, SPXUSD 2020-2025), runs the tests.
+(HistData 1-minute CFD files: XAUUSD 2009-2025, SPXUSD 2020-2025), runs the tests.
 The data must never be committed to this public repo.
+
+XAUUSD 2009-2014 were added to the data repo on 2026-09-25 (2009 starts 2009-03-15; HistData
+has no earlier gold year). They are not assigned to any split yet and have not been
+backtested; Xaver decides their use. Data reports: the daily halt often starts at 17:15 New
+York (old COMEX schedule) and ends at 18:00; 2009-2012 have 34-41 holes >= 15 min outside
+halts per year (2014-2015: 6-10); the same US/EU DST-mismatch weeks as 2015 look shifted by
+one hour (reopen shown at 19:00 New York).
+If the clone fails in the cloud, attach `xaverm1/lsd-trader-data` to the session, clone it
+next to this repo and link it: `ln -s ../lsd-trader-data data`.
 
 ## Goal now
 
