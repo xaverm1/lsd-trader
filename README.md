@@ -1,4 +1,5 @@
 # lsd-trader
+n[![CI](https://github.com/xaverm1/lsd-trader/actions/workflows/ci.yml/badge.svg)](https://github.com/xaverm1/lsd-trader/actions/workflows/ci.yml)
 
 Backtest and (later) live engine for the LSD 5-minute futures strategy.
 
