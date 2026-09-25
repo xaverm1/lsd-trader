@@ -143,6 +143,14 @@ help (my earlier guess from the flat exits was wrong); any edge sits in the few 
 The curve is noisy and no level beats the ~2.9 multiple-testing bar; 5 R vs 4 R is not a
 finding. Median run-up of stopped trades 0.61 R; 34 % of them reached 1 R, 14 % 2 R first.
 
+### Zone age on the frozen baseline (`scripts/zone_age.py`, 2026-09-25)
+
+Only the youngest zones stand out: age <= 1 h (12 bars) at the sweep N=850, -0.077 R/T
+(t -1.2); older N=5557, +0.066 R/T (t 2.5); difference +0.14 R/T, t 2.0. Not stable: the
+young bucket is better than the old one in 3 of 7 years (2018, 2019, 2021), and on SPX 2025
+it was the only positive bucket. About 20 cuts looked at -> not a finding, no filter. At most a
+pre-registered hypothesis "min zone age > 12 bars" for 2022-2023.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
