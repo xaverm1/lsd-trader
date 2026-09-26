@@ -3,6 +3,7 @@
 liquidity and the bar that broke it.
 
 Usage: python scripts/liq_annotator.py RUN_FOLDER [--n N] [--seed S] [--since YYYY-MM-DD]
+       [--exclude liq_marks.json ...] [--name OUT]
 
 Writes RUN_FOLDER/liq_annotate.html: one chart per setup (strategy bars from before the zone
 to the entry; zone and entry shown, the code's liquidity hidden until "Code zeigen"). One
@@ -29,14 +30,25 @@ ap.add_argument("run", type=Path)
 ap.add_argument("--n", type=int, default=20)
 ap.add_argument("--seed", type=int, default=5)
 ap.add_argument("--since", default="2026-01-01")
+ap.add_argument(
+    "--exclude", nargs="*", type=Path, default=[], help="liq_marks.json of earlier batches"
+)
+ap.add_argument("--name", default="liq_annotate", help="output file name (without .html)")
 args = ap.parse_args()
+shown = {
+    (s["entry_utc"], s["side"]) for f in args.exclude for s in json.loads(f.read_text())["setups"]
+}
 
 run = load_run(args.run)
 inst, bars = run.data.instrument, run.data.bars
 px = inst.to_price
 trades, seen = [], set()
 for t in sorted(run.trades, key=lambda t: t["entry_ts"]):
-    if (t["entry_ts"], t["side"]) not in seen and t["entry_ts"].date().isoformat() >= args.since:
+    if (
+        (t["entry_ts"], t["side"]) not in seen
+        and (t["entry_ts"].isoformat(), t["side"]) not in shown
+        and t["entry_ts"].date().isoformat() >= args.since
+    ):
         seen.add((t["entry_ts"], t["side"]))
         trades.append(t)
 picked = sorted(
@@ -248,7 +260,7 @@ window.addEventListener("resize", draw);
 fit(); draw();
 </script></html>"""
 
-out = args.run / "liq_annotate.html"
+out = args.run / f"{args.name}.html"
 out.write_text(
     PAGE.replace("__DATA__", json.dumps(setups)).replace("__RUN__", json.dumps(args.run.name)),
     encoding="utf-8",

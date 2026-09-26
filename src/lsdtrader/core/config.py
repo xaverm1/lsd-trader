@@ -34,7 +34,10 @@ class StrategyConfig:
     liq_min_leg_atr: float | None = None
     # bos_p: a (strong) BOS makes its swing low P liquidity; all_before_bos: it makes every
     # swing low that formed before it and is not swept yet liquidity (P, L0 and older ones)
-    liq_source: Literal["bos_p", "all_before_bos"] = "bos_p"
+    # swing_break (Xaver 2026-09-26): a close above a swing high is a break; for a zone its
+    # liquidity is the lowest unswept swing low after that high (up to the break bar) above the
+    # zone and after its origin, with a leg high - low of at least liq_min_leg_atr ATR
+    liq_source: Literal["bos_p", "all_before_bos", "swing_break"] = "bos_p"
     atr_len: int = 14
     max_bars_sweep_to_tap: int = 12  # one hour of 5-minute bars (Spec §7)
     # 1-minute entry modes: the tap must come at most this many minutes after the sweep minute

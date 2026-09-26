@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from lsdtrader.core.bar import TickBar
 from lsdtrader.core.config import StrategyConfig
@@ -22,6 +22,9 @@ class Liquidity:
     bos_idx: int
     h2: int | None = None  # the level its BOS broke
     h2_idx: int | None = None
+    # liq_source="swing_break": the swing lows (bar, price) of every break that made this one
+    # liquidity; for a zone it counts only as the lowest of a group above the zone after O
+    groups: list[list[tuple[int, int]]] = field(default_factory=list)
 
 
 class LiquidityBook:
@@ -40,6 +43,37 @@ class LiquidityBook:
         """Liquidity from a BOS: its P, or another swing low (bar, price) the BOS validates."""
         idx, price = swing if swing is not None else (bos.p_idx, bos.p_low)
         liq = Liquidity(self._next_id, idx, price, bos.bos_idx, bos.h2, h2_idx)
+        self._next_id += 1
+        self._open.append(liq)
+        return liq
+
+    def add_break(
+        self, h_idx: int, h_price: int, bos_idx: int, group: list[tuple[int, int]]
+    ) -> list[Liquidity]:
+        """liq_source="swing_break": the swing lows of one break (a close above the swing high
+        at `h_idx`). `group` is shared, so candidates appended to it later count as well.
+        A swing low already open is kept once and gets this group too; returns new ones."""
+        return [
+            x for cand in group if (x := self.add_to_break(h_idx, h_price, bos_idx, group, cand))
+        ]
+
+    def add_to_break(
+        self,
+        h_idx: int,
+        h_price: int,
+        bos_idx: int,
+        group: list[tuple[int, int]],
+        cand: tuple[int, int],
+    ) -> Liquidity | None:
+        """Register swing low `cand` of a break's `group` (appended if not in it yet)."""
+        if cand not in group:
+            group.append(cand)
+        known = next((x for x in self._open if x.idx == cand[0]), None)
+        if known is not None:
+            if not any(g is group for g in known.groups):
+                known.groups.append(group)
+            return None
+        liq = Liquidity(self._next_id, cand[0], cand[1], bos_idx, h_price, h_idx, [group])
         self._next_id += 1
         self._open.append(liq)
         return liq
@@ -78,6 +112,8 @@ def match_zones(
         limit = cfg.liq_max_dist_atr
         if limit is not None and (atr is None or liq.price - z.top > limit * atr):
             continue
+        if liq.groups and not any(lowest_for(g, z) == liq.idx for g in liq.groups):
+            continue
         if cfg.liq_rule == "nearest" and any(
             o is not liq and o.idx > z.o_idx and z.top < o.price < liq.price
             for o in open_before or []
@@ -87,3 +123,10 @@ def match_zones(
     if matched:
         return matched, None
     return [], NO_SETUP_REASONS[stage]
+
+
+def lowest_for(group: list[tuple[int, int]], z: Zone) -> int | None:
+    """Bar of the lowest swing low of a break above zone `z` and after its origin (the latest
+    one if several share the price)."""
+    cands = [(price, -idx) for idx, price in group if price > z.top and idx > z.o_idx]
+    return -min(cands)[1] if cands else None

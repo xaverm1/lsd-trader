@@ -18,7 +18,7 @@ from lsdtrader.strategy.context import LegTracker, LevelBook, TrendTracker, hh_h
 from lsdtrader.strategy.liquidity import LiquidityBook, match_zones
 from lsdtrader.strategy.setups import Entry, SetupTracker
 from lsdtrader.strategy.structure import StructureTracker, h2_index, strong_level
-from lsdtrader.strategy.swings import confirmed_swing_low
+from lsdtrader.strategy.swings import Swing, confirmed_swing_low
 from lsdtrader.strategy.zones import Zone, ZoneBook
 
 Side = Literal["long", "short"]
@@ -85,7 +85,10 @@ class SideEngine:
         self._atrs: list[float | None] = []  # ATR after each bar
         self._run_open: int | None = None  # open of the latest run of bearish minutes
         self._bearish_run = False
-        self._swings: list[tuple[int, int]] = []  # swing lows waiting for a BOS (all_before_bos)
+        self._swings: list[tuple[int, int]] = []  # unswept swing lows (all_before_bos, swing_break)
+        self._highs: list[tuple[int, int]] = []  # swing highs not closed above yet (swing_break)
+        # breaks whose swing lows up to the break bar are not all confirmed yet (swing_break)
+        self._breaks: list[tuple[int, int, int, list[tuple[int, int]]]] = []
         self.leg = LegTracker(cfg.leg_pivot)
         self._vols: deque[float] = deque(maxlen=cfg.absorb_len)
         self._vsum = 0.0
@@ -117,6 +120,8 @@ class SideEngine:
         for bos in self.structure.update(self.bars, swing):
             self.log.emit("bos", p_idx=bos.p_idx, l0_idx=bos.l0_idx, bos_idx=bos.bos_idx, h2=bos.h2)
             self.zones.create(self.bars, bos)
+            if self.cfg.liq_source == "swing_break":
+                continue
             n = self.cfg.liq_bos_pivot
             if n > 0 and not strong_level(self.bars, bos, n):
                 self.log.emit("liq_weak_bos", p_idx=bos.p_idx)
@@ -133,6 +138,8 @@ class SideEngine:
             for s in [s for s in self._swings if s[0] < bos.bos_idx]:
                 self.liquidity.add(bos, h2_idx, s)
             self._swings = [s for s in self._swings if s[0] >= bos.bos_idx]
+        if self.cfg.liq_source == "swing_break":
+            self._swing_break(i, bar, swing)
         before = self.liquidity.open
         for liq in [] if by_minute else self.liquidity.swept_by(bar):
             zones, reason = match_zones(liq, self.zones.live(), atr, self.cfg, before)
@@ -152,6 +159,39 @@ class SideEngine:
         running = {s.zone.zone_id for s in self.setups.pending}
         self.zones.relocate_touched(self.bars, running)
         return entries
+
+    def _swing_break(self, i: int, bar: TickBar, swing: Swing | None) -> None:
+        """liq_source="swing_break": breaks of swing highs and their swing lows."""
+        n, k = self.cfg.piv_len, self.cfg.liq_min_leg_atr
+
+        def leg_ok(h_price: int, low: int, bos_idx: int) -> bool:
+            a = self._atrs[bos_idx]
+            return k is None or (a is not None and h_price - low >= k * a)
+
+        # swing lows up to a break bar that this bar confirms
+        for h_idx, h_price, bos_idx, group in self._breaks:
+            if (
+                swing is not None
+                and h_idx < swing.idx <= bos_idx
+                and leg_ok(h_price, swing.price, bos_idx)
+            ):
+                self.liquidity.add_to_break(
+                    h_idx, h_price, bos_idx, group, (swing.idx, swing.price)
+                )
+        self._breaks = [x for x in self._breaks if x[2] > i - n]
+        c = i - n
+        if c - n >= 0 and all(
+            self.bars[c - j].high <= self.bars[c].high and self.bars[c + j].high < self.bars[c].high
+            for j in range(1, n + 1)
+        ):
+            self._highs.append((c, self.bars[c].high))
+        broken = [h for h in self._highs if bar.close > h[1]]
+        self._highs = [h for h in self._highs if bar.close <= h[1]]
+        for h_idx, h_price in broken:
+            group = [s for s in self._swings if s[0] > h_idx and leg_ok(h_price, s[1], i)]
+            self.log.emit("swing_break", h_idx=h_idx, h=h_price, lows=len(group))
+            self.liquidity.add_break(h_idx, h_price, i, group)
+            self._breaks.append((h_idx, h_price, i, group))
 
     def _young(self, zones: list[Zone], ts: datetime) -> list[Zone]:
         """Zones at most zone_max_age_days trading days older than the sweep at `ts`."""

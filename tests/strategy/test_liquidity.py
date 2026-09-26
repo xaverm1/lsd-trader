@@ -69,3 +69,31 @@ def test_nearest_rule_ignores_swings_older_than_the_zone() -> None:
     cfg = StrategyConfig(liq_rule="nearest")
     old, far = liq(idx=0, price=113), liq(idx=12, price=118)
     assert match_zones(far, [zone(o_idx=3)], None, cfg, [old, far])[1] is None
+
+
+def test_swing_break_liquidity_is_the_lowest_swing_low_above_the_zone() -> None:
+    # One BOS (swing high 130 at bar 8, broken on bar 15) with the swing lows after that high:
+    # for a zone only the lowest of them above its top and after its origin is liquidity.
+    book = LiquidityBook()
+    group = [(10, 120), (12, 115), (14, 118)]
+    liqs = {x.idx: x for x in book.add_break(8, 130, 15, group)}
+    cfg = StrategyConfig(liq_source="swing_break")
+    low_zone, high_zone, late_zone = (
+        zone(o_idx=9, top=111),
+        zone(o_idx=9, top=116),
+        zone(o_idx=12, top=111),
+    )
+    assert match_zones(liqs[12], [low_zone], None, cfg)[0] == [low_zone]
+    assert match_zones(liqs[10], [low_zone], None, cfg)[0] == []  # a lower one exists
+    assert match_zones(liqs[14], [high_zone], None, cfg)[0] == [high_zone]  # 115 is in the zone
+    assert match_zones(liqs[14], [late_zone], None, cfg)[0] == [late_zone]  # 12 is not after O
+    assert (liqs[12].h2, liqs[12].h2_idx, liqs[12].bos_idx) == (130, 8, 15)
+
+
+def test_swing_break_liquidity_is_kept_once_per_swing_low() -> None:
+    book = LiquidityBook()
+    book.add_break(8, 130, 15, [(12, 115)])
+    book.add_break(13, 125, 16, [(12, 115), (14, 118)])
+    assert sorted(x.idx for x in book.open) == [12, 14]
+    (x12,) = [x for x in book.open if x.idx == 12]
+    assert len(x12.groups) == 2

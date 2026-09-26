@@ -125,3 +125,31 @@ def test_all_before_bos_makes_every_unswept_swing_low_liquidity() -> None:
     # on bar 1 (L0 of the first BOS) had no BOS of its own
     assert open_prices(StrategyConfig()) == [106, 113]
     assert open_prices(StrategyConfig(liq_source="all_before_bos")) == [100, 106, 113]
+
+
+def test_swing_break_makes_the_lows_before_the_break_liquidity() -> None:
+    # Swing high 120 (bar 2) is broken by the close of bar 10, swing high 112 (bar 6) by the
+    # close of bar 9. Swing lows after them: 102 (bar 4), 105 (bar 8). Each break makes its
+    # swing lows liquidity; 105 belongs to both breaks and is kept once.
+    bars = make_bars(
+        (100, 101, 99, 100),
+        (100, 110, 100, 109),
+        (109, 120, 108, 112),  # 2 swing high 120
+        (112, 113, 105, 106),
+        (106, 107, 102, 103),  # 4 swing low 102
+        (104, 111, 104, 110),
+        (110, 112, 107, 108),  # 6 swing high 112
+        (108, 109, 106, 107),
+        (107, 110, 105, 109),  # 8 swing low 105
+        (109, 121, 108, 120),  # 9 closes above 112, not above 120
+        (120, 123, 119, 122),  # 10 closes above 120
+        (122, 125, 121, 124),
+    )
+    strat = LsdStrategy(StrategyConfig(liq_source="swing_break"))
+    for b in bars:
+        strat.long.on_bar(b)
+    book = {x.idx: x for x in strat.long.liquidity.open}
+    assert sorted((x.idx, x.price) for x in book.values()) == [(4, 102), (8, 105)]
+    assert (book[4].h2, book[4].h2_idx, book[4].bos_idx) == (120, 2, 10)
+    assert (book[8].h2, book[8].h2_idx, book[8].bos_idx) == (112, 6, 9)
+    assert len(book[8].groups) == 2
