@@ -73,8 +73,10 @@ minutengenau auf 1-min-Kerzen geprüft.
 4. **Invalidierung der Zone** (`zone_kill=close_inside`, Standard): Eine 30-min-Kerze
    schließt in der Zone (Close ≤ Oberkante), oder irgendein Docht geht unter die Unterkante.
    Den Docht prüft der Code jede Minute. Nach der Invalidierung gibt es keinen Einstieg mehr.
-5. **Liquidität**: Das Swing-Tief P eines BOS, das über einer verlassenen Zone liegt und
-   nach dem Zonenursprung entstanden ist. Dazu kommen zwei strengere Regeln von Xaver:
+5. **Liquidität**: Ein starker BOS macht jedes noch nicht gesweepte Swing-Tief, das vor ihm
+   entstanden ist, zu Liquidität (`liq_source=all_before_bos`, Xavers Variante 2: P, L0 und
+   ältere Tiefs; Standard `bos_p` = nur P). Sie muss über einer verlassenen Zone liegen und
+   nach dem Zonenursprung entstanden sein. Dazu kommen zwei strengere Regeln von Xaver:
    - `liq_rule=nearest`: Nur das offene Swing-Tief, das der Zone am nächsten liegt, zählt.
      Liegt ein anderes offenes Swing-Tief dazwischen, gilt es als zu weit weg.
    - `liq_bos_pivot=N`: Das Level H2, das der BOS der Liquidität gebrochen hat, muss selbst
@@ -91,8 +93,15 @@ minutengenau auf 1-min-Kerzen geprüft.
    schließt, innerhalb von 15 Minuten (`absorb_wait_min`), zum Close dieser Minute.
 10. **Stop**: Das tiefste Tief seit dem Sweep (`stop_ref=extreme`, Xavers Live-Stop).
     Alternative: das Tief der Absorptionsminute (`stop_ref=absorption`), war schlechter.
-11. **Ziel**: 4 R (`rr=4`). Positionen laufen über Nacht (`--hold-overnight`), ohne
-    Handelsfenster und ohne Glattstellung.
+11. **Ziel**: am Leg wie in Xavers Indikator (`tp_mode=leg`, `tp_leg=2`): Leg vom letzten
+    bestätigten 1-min-Swing-Hoch (5 Minuten je Seite) bis zum tiefsten Tief seitdem, zur
+    Absorptionsminute festgehalten; Ziel = Level -2 (Leg-Hoch + 2 × Leg). Getestet -2, -2,5,
+    -4. Liegt im Median 8 R (bei -2) vom Einstieg, weil der Stop am tiefsten Docht eng ist.
+    Alternative `tp_mode=rr` mit `rr=4`.
+    **Session** (`--flat-only`): alles wird um 15:10 Chicago glattgestellt (minutengenau);
+    Einstiege den ganzen Tag, nur von 15:10 bis zur Wiedereröffnung 17:00 keine. Xaver will
+    kein Einstiegsfenster 14-17 Uhr (das alte Prop-Fenster ohne `--flat-only` ist nicht
+    gewünscht). `--hold-overnight` nur für Vergleiche.
 12. **Kosten**: Kommission laut Instrument (ES/NQ je 2,50 $ pro Seite) plus 1 Tick
     Slippage pro Seite, in R des jeweiligen Trades.
 
@@ -101,9 +110,9 @@ Aktueller Befehl (Testlauf NQ, 2025 nur zum Aufwärmen):
 ```bash
 D=data/databento
 .venv/bin/lsd backtest $D/NQ_ohlcv1m_2025.csv.gz $D/NQ_ohlcv1m_2026.csv.gz \
-  --timeframe 30 --hold-overnight \
+  --timeframe 30 --flat-only \
   --set entry_mode=absorption_1m --set liq_rule=nearest --set zone_kill=close_inside \
-  --set liq_bos_pivot=2 --set max_bars_sweep_to_tap=48 --set max_min_sweep_to_tap=120
+  --set liq_bos_pivot=2 --set liq_source=all_before_bos --set tp_mode=leg --set tp_leg=2
 ```
 
 Ausgabe: `runs/<Zeit>_<Symbol>_<hash>/` (trades.parquet, meta.json). Auswertung:
@@ -129,7 +138,8 @@ behalten nur einen Trade pro Minute und Seite (live wäre das eine Position).
 | **Absorption auf ES/NQ 2010-2026, alte Regeln** (jede Liquidität, Zone nur beim 30-min-Close geprüft) | NQ brutto ±0, netto −0,16 R; ES brutto −0,11 R (t −4), netto −0,40 R. Kein Vorteil. |
 | Xavers Prüfung der Charts | 30 % der Liquidität lag > 3 Zonenhöhen entfernt; 20 % der Einstiege kamen nach einem Docht durch die Zone. Daraufhin Regeln 4 und 5 (oben) eingebaut. |
 | **Neue Regeln, nur NQ 2026** (in-sample!) | liq_bos_pivot=2: 174 Trades, netto +0,12 R; =3: 144 Trades, +0,01 R |
-| Fenster Sweep→Tap, NQ 2026, pivot 2 | 15 min +0,57 R (75 T), 60 min +0,39 (114), 2 h +0,34 (139), 4 h +0,17 (158), 24 h +0,13 (194). Median Sweep→Tap 43 min. Tap > 1 h nach dem Sweep: negativ. |
+| Variante 2 + Leg-Ziel + `--flat-only`, NQ 2026 | Ziel -2: 197 Trades, netto +0,06 R; -2,5: +0,13; -4: +0,13 (t ≤ 0,6); keine Übernacht-Trades |
+| Fenster Sweep→Tap, NQ 2026, pivot 2 (alte Liquiditäts- und Zielregel) | 15 min +0,57 R (75 T), 60 min +0,39 (114), 2 h +0,34 (139), 4 h +0,17 (158), 24 h +0,13 (194). Median Sweep→Tap 43 min. Tap > 1 h nach dem Sweep: negativ. |
 
 **Wichtig:** Alle Regeln der letzten Runde sind entstanden, während Xaver Trades aus 2026
 angeschaut hat. 2026 ist damit in-sample, die guten Zahlen dort beweisen nichts (dazu kleine
@@ -145,9 +155,8 @@ eingeflossen sind.
 3. Wenn etwas übrig bleibt: Ziele (feste R vs. Bein-Levels) und Einstand erneut prüfen.
 
 Offene Fragen an Xaver:
-- **Prop-Zeiten**: Die Futures-Läufe halten über Nacht und haben kein Handelsfenster. Für
-  seine Prop-Firm galt früher: keine Einstiege 14:00-17:00 Chicago, flat um 15:10 Chicago.
-  Klären, ob das hier auch gelten soll (CLI: ohne `--hold-overnight`).
+- Teilgewinne (z. B. 50 % bei -2, Rest bis -4) sind noch nicht im Broker, nur ein Ziel.
+- Fenster Sweep→Tap ist noch offen (Standard 12 Kerzen = 6 h).
 - **Docht während die Zone noch baut**: Geht die Kerze nach dem Zonenursprung mit einem
   Docht knapp unter die Zone, bevor die Zone verlassen ist, bleibt die Zone gültig (nur ein
   Close darunter killt sie in dieser Phase). Beispiel NQ 25.09.2026 16:20. Noch nicht

@@ -349,6 +349,15 @@ liq_bos_pivot=2, max_bars_sweep_to_tap=48 as backstop), net R per trade: 15 min 
 60-240 -0.15 (38), over 240 -0.29 (50). Caution: 2026 is the year whose charts shaped the
 rules, so it is in-sample; the check is 2010-2025 on NQ and ES.
 
+Third review round (2026-09-26): `liq_source=all_before_bos` (a strong BOS validates every
+unswept swing low before it, Xaver's variant 2), `tp_mode=leg` / `tp_leg` / `leg_pivot`
+(target at leg level -k as the TradingView leg projection), broker flat to the minute (30m
+bars never end at 15:10, so before this fix the prop flat never fired on 30m) and CLI
+`--flat-only` (flat 15:10 CT, entries until then; Xaver does not want the 14:00 entry stop).
+NQ 2026 test runs, flat-only, nearest, close_inside, pivot 2, all_before_bos: leg -2 197 T net
++0.055, -2.5 +0.125, -4 +0.128 (t <= 0.6); level -2 sits a median 8 R from the entry. See
+`docs/HANDOFF_AGENT.md` for the current definition.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
