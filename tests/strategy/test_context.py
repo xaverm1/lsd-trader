@@ -1,6 +1,8 @@
+from datetime import timedelta
+
 from lsdtrader.core.bar import TickBar
 from lsdtrader.strategy.context import LevelBook, TrendTracker, hh_hl, is_swing_high
-from tests.helpers import make_bars
+from tests.helpers import T0, make_bars
 
 
 def bars_hl(*hl: tuple[int, int]) -> list[TickBar]:
@@ -45,3 +47,16 @@ def test_level_book_keeps_untouched_swing_highs() -> None:
     bars += make_bars((12, 16, 12, 15), start=5)  # trades through 15
     book.update(bars)
     assert book.nearest_above(12) == 20
+
+
+def test_leg_tracker_swing_high_and_low_since() -> None:
+    from lsdtrader.strategy.context import LegTracker
+
+    leg = LegTracker(2)
+    highs_lows = [(10, 8), (11, 9), (15, 12), (13, 10), (12, 7), (14, 9)]
+    for k, (h, lo) in enumerate(highs_lows):
+        leg.update(TickBar(T0 + timedelta(minutes=k), lo, h, lo, lo))
+    # 15 is a swing high (2 lower highs each side), confirmed on the 5th minute
+    assert (leg.top, leg.low) == (15, 7)
+    leg.update(TickBar(T0 + timedelta(minutes=9), 6, 8, 5, 6))
+    assert (leg.top, leg.low) == (15, 5)

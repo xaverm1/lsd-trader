@@ -26,6 +26,9 @@ class StrategyConfig:
     # > 0: a swing low is liquidity only if the level its BOS broke (H2) is itself a swing high
     # with this many bars on each side (the right side before the BOS bar)
     liq_bos_pivot: int = 0
+    # bos_p: a (strong) BOS makes its swing low P liquidity; all_before_bos: it makes every
+    # swing low that formed before it and is not swept yet liquidity (P, L0 and older ones)
+    liq_source: Literal["bos_p", "all_before_bos"] = "bos_p"
     atr_len: int = 14
     max_bars_sweep_to_tap: int = 12  # one hour of 5-minute bars (Spec §7)
     # 1-minute entry modes: the tap must come at most this many minutes after the sweep minute
@@ -54,6 +57,13 @@ class StrategyConfig:
     absorb_wait_min: int = 15
     stop_ref: Literal["extreme", "absorption"] = "extreme"  # absorption_1m: stop at the lowest
     # low since the sweep, or at the low of the absorption minute
+    # Target. rr: entry + rr * risk. leg (absorption_1m, as Xaver's TradingView leg projection):
+    # the leg runs from the last confirmed 1-minute swing high (leg_pivot minutes each side)
+    # before the absorption minute down to the lowest low since it; the target is level
+    # -tp_leg = leg high + tp_leg * leg length. No leg: rr target.
+    tp_mode: Literal["rr", "leg"] = "rr"
+    tp_leg: float = 2.0
+    leg_pivot: int = 5
 
     def __post_init__(self) -> None:
         if self.piv_len < 1:
@@ -80,6 +90,10 @@ class StrategyConfig:
             raise ValueError("max_min_sweep_to_tap must be >= 0 or None")
         if self.min_body_ticks < 1:
             raise ValueError("min_body_ticks must be >= 1")
+        if self.tp_leg <= 0:
+            raise ValueError("tp_leg must be > 0")
+        if self.leg_pivot < 1:
+            raise ValueError("leg_pivot must be >= 1")
         if self.rr <= 0:
             raise ValueError("rr must be > 0")
         if self.max_trades_per_zone < 1:

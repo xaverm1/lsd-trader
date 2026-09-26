@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from lsdtrader.core.bar import TickBar
 from lsdtrader.core.config import StrategyConfig
 from lsdtrader.core.events import EventLog
+from lsdtrader.strategy.context import LegTracker
 from lsdtrader.strategy.liquidity import Liquidity
 from lsdtrader.strategy.zones import Zone, ZoneBook
 
@@ -28,6 +29,8 @@ class Setup:
     abs_low: int | None = None
     abs_ts: datetime | None = None
     abs_score: float | None = None
+    leg_top: int | None = None  # absorption_1m: leg at the absorption minute (tp_mode="leg")
+    leg_low: int | None = None
     sweep_ts: datetime | None = None  # 1-minute modes: minute of the sweep
     tap_ts: datetime | None = None  # 1-minute modes: minute of the tap
 
@@ -164,7 +167,7 @@ class SetupTracker:
         return entries
 
     def on_minute_absorption(
-        self, bars: Sequence[TickBar], m: TickBar, score: float
+        self, bars: Sequence[TickBar], m: TickBar, score: float, leg: LegTracker | None = None
     ) -> list[Entry]:
         """absorption_1m: advance setups by one minute (see StrategyConfig.entry_mode)."""
         cfg, i = self._cfg, len(bars)
@@ -187,7 +190,13 @@ class SetupTracker:
                     if s.abs_high is not None and m.close > s.abs_high:
                         assert s.abs_low is not None
                         stop = s.low if cfg.stop_ref == "extreme" else s.abs_low
-                        entry = self._enter(bars, s, i, m.close, stop, m.ts)
+                        target = self._leg_target(s, m.close)
+                        if target is not None and target <= m.close:
+                            self._log.emit("leg_target_not_beyond_entry", setup_id=s.setup_id)
+                            continue
+                        entry = self._enter(bars, s, i, m.close, stop, m.ts, target)
+                        entry.features["leg_top"] = s.leg_top  # side space: negated for shorts
+                        entry.features["leg_low"] = s.leg_low
                         entry.features["abs_score"] = s.abs_score
                         entry.features["abs_ts"] = s.abs_ts  # absorption minute
                         entry.features["abs_high"] = s.abs_high  # side space: negated for shorts
@@ -199,6 +208,10 @@ class SetupTracker:
                     lower_wick = m.high + m.low <= 2 * min(m.open, m.close)
                     if score >= cfg.absorb_min and lower_wick:
                         s.abs_high, s.abs_low, s.abs_ts, s.abs_score = m.high, m.low, m.ts, score
+                        s.leg_top, s.leg_low = None, None
+                        top, low = (leg.top, leg.low) if leg is not None else (None, None)
+                        if top is not None and low is not None and top > low:
+                            s.leg_top, s.leg_low = top, low
             keep.append(s)
         self._pending = keep
         return entries
@@ -235,6 +248,12 @@ class SetupTracker:
         self._pending = keep
         return entries
 
+    def _leg_target(self, s: Setup, entry: int) -> int | None:
+        """tp_mode="leg": level -tp_leg of the leg (None: rr target)."""
+        if self._cfg.tp_mode != "leg" or s.leg_top is None or s.leg_low is None:
+            return None
+        return s.leg_top + math.ceil(self._cfg.tp_leg * (s.leg_top - s.leg_low))
+
     def _tap_too_late(self, s: Setup, m: TickBar) -> bool:
         """max_min_sweep_to_tap: no tap yet and the window since the sweep minute has passed."""
         limit = self._cfg.max_min_sweep_to_tap
@@ -267,6 +286,7 @@ class SetupTracker:
         close: int | None = None,
         wick_low: int | None = None,
         ts: datetime | None = None,
+        target: int | None = None,
     ) -> Entry:
         """Entry on bar `i` at its close, or at a minute's `close` (reclaim, with the lowest
         low since the sweep in `wick_low` and the minute in `ts`)."""
@@ -283,7 +303,8 @@ class SetupTracker:
             stop = min(b.low for b in bars[s.sweep_idx : i + 1])
         stop -= cfg.sl_buffer_ticks
         risk = entry - stop
-        target = entry + math.ceil(cfg.rr * risk)
+        if target is None:
+            target = entry + math.ceil(cfg.rr * risk)
         dist = s.liq.price - z.top
         features: dict[str, object] = {
             "zone_height_ticks": z.top - z.bot,

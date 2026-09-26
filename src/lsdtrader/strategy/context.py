@@ -15,6 +15,7 @@ means "in the trade's direction": +1 with the trade, -1 against it, 0 unclear.
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Sequence
 
 from lsdtrader.core.bar import TickBar
@@ -83,3 +84,26 @@ class LevelBook:
     def nearest_above(self, price: int) -> int | None:
         above = [lv for lv in self._levels if lv > price]
         return min(above) if above else None
+
+
+class LegTracker:
+    """Leg for targets, as the TradingView leg projection: the last confirmed swing high of the
+    1-minute bars (`n` bars each side; left may be equal, right strictly lower) and the lowest
+    low from that swing high up to now. Feed every minute in order."""
+
+    def __init__(self, n: int) -> None:
+        self.n = n
+        self._buf: deque[TickBar] = deque(maxlen=2 * n + 1)
+        self.top: int | None = None
+        self.low: int | None = None
+
+    def update(self, m: TickBar) -> None:
+        self._buf.append(m)
+        if self.low is not None:
+            self.low = min(self.low, m.low)
+        if len(self._buf) < self._buf.maxlen:  # type: ignore[operator]
+            return
+        n, buf = self.n, list(self._buf)
+        c = buf[n].high
+        if all(buf[n - k].high <= c and buf[n + k].high < c for k in range(1, n + 1)):
+            self.top, self.low = c, min(b.low for b in buf[n:])

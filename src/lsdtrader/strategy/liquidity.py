@@ -34,8 +34,12 @@ class LiquidityBook:
         """Liquidity not yet swept (for inspection)."""
         return list(self._open)
 
-    def add(self, bos: Bos, h2_idx: int | None = None) -> Liquidity:
-        liq = Liquidity(self._next_id, bos.p_idx, bos.p_low, bos.bos_idx, bos.h2, h2_idx)
+    def add(
+        self, bos: Bos, h2_idx: int | None = None, swing: tuple[int, int] | None = None
+    ) -> Liquidity:
+        """Liquidity from a BOS: its P, or another swing low (bar, price) the BOS validates."""
+        idx, price = swing if swing is not None else (bos.p_idx, bos.p_low)
+        liq = Liquidity(self._next_id, idx, price, bos.bos_idx, bos.h2, h2_idx)
         self._next_id += 1
         self._open.append(liq)
         return liq

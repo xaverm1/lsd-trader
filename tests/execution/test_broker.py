@@ -249,3 +249,16 @@ def test_flat_check_uses_the_bar_length() -> None:
     last = TickBar(datetime(2024, 7, 8, 19, 55, tzinfo=UTC), 100, 110, 95, 105)
     (t,), _, _ = run(signal(), [last], cfg, five=last)
     assert t.exit_reason == "flat_break"
+
+
+def test_flat_to_the_minute_inside_a_long_bar() -> None:
+    # a 30-minute bar never ends at 15:10 CT; the minute ending there closes the position
+    at = datetime(2024, 1, 8, 21, 8, tzinfo=UTC)  # 15:08 CT
+    mins = [TickBar(at, 100, 102, 99, 101), TickBar(at + timedelta(minutes=1), 101, 104, 100, 103)]
+    later = TickBar(at + timedelta(minutes=2), 103, 110, 102, 109)
+    (t,), broker, _ = run(signal(), [*mins, later], ExecutionConfig(bar_minutes=30))
+    assert (t.exit_reason, t.exit_raw, t.exit_ts) == ("flat_break", 103, mins[1].ts)
+    assert broker.positions == []
+    held = ExecutionConfig(bar_minutes=30, flat_before_break=False)
+    trades, _, _ = run(signal(), [*mins, later], held)
+    assert trades == []

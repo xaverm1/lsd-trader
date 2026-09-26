@@ -110,3 +110,18 @@ def test_a_tap_bar_can_become_a_new_zone() -> None:
     assert zone.state == "left"  # a live zone on the tap bar, ready for a later setup
     kinds = [(e.bar_index, e.kind) for e in strat.drain_events() if e.side == "long"]
     assert (18, "bos") in kinds and (18, "zone_duplicate") in kinds
+
+
+def test_all_before_bos_makes_every_unswept_swing_low_liquidity() -> None:
+    from lsdtrader.strategy.lsd import SideEngine
+
+    def open_prices(cfg: StrategyConfig) -> list[int]:
+        eng = SideEngine(cfg)
+        for b in FULL_LONG[:14]:
+            eng.on_bar(b)
+        return sorted(liq.price for liq in eng.liquidity.open)
+
+    # BOS on bar 9 (P = 106 on bar 6), BOS on bar 13 (P' = 113 on bar 11); the swing low 100
+    # on bar 1 (L0 of the first BOS) had no BOS of its own
+    assert open_prices(StrategyConfig()) == [106, 113]
+    assert open_prices(StrategyConfig(liq_source="all_before_bos")) == [100, 106, 113]

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 
@@ -208,3 +209,26 @@ def test_absorption_window_from_sweep_to_tap_in_minutes() -> None:
     ok = StrategyConfig(entry_mode="absorption_1m", max_min_sweep_to_tap=1)
     (tr,) = run_backtest(INST, data, {bar.ts: mins}, ok).trades
     assert tr.features["min_sweep_to_tap"] == 1
+
+
+def test_absorption_leg_target() -> None:
+    # minute 1 is a 1-minute swing high (118) with leg_pivot=1; the leg runs down to the
+    # deepest wick 107; level -2 = 118 + 2 * 11 = 140 is the target
+    t = FULL_LONG[15].ts
+    m = timedelta(minutes=1)
+    mins = [
+        TickBar(t, 115, 116, 114, 115, 10),
+        TickBar(t + m, 115, 118, 115, 117, 10),  # swing high 118
+        TickBar(t + 2 * m, 117, 117, 112, 112, 10),  # sweep of 113
+        TickBar(t + 3 * m, 112, 112, 107, 109, 10),  # tap, deepest wick 107
+        TickBar(t + 4 * m, 111, 112, 108, 111, 100),  # absorption
+        TickBar(t + 5 * m, 111, 114, 111, 113, 10),  # close above 112 -> entry
+    ]
+    bar = TickBar(t, 115, 118, 107, 113, 160)
+    cfg = StrategyConfig(entry_mode="absorption_1m", tp_mode="leg", tp_leg=2, leg_pivot=1)
+    (tr,) = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, cfg).trades
+    assert (tr.entry_signal, tr.stop, tr.target) == (113, 107, 140)
+    assert (tr.features["leg_top"], tr.features["leg_low"]) == (118, 107)
+    rr = replace(cfg, tp_mode="rr")
+    (tr,) = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, rr).trades
+    assert tr.target == 113 + 4 * 6

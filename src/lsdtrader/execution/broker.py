@@ -233,7 +233,15 @@ class SimBroker:
                 return self._close(pos, sig.stop, m.ts, "sl", slip=True)
             if hit_tp:
                 return self._close(pos, sig.target, m.ts, "tp", slip=False)
+            if self._flat_minute(m):  # the minute ending at the flat time: out at its close
+                return self._close(pos, m.close + sh, m.ts, "flat_break", slip=True)
         return None
+
+    def _flat_minute(self, m: TickBar) -> bool:
+        """Flat to the minute, so strategy bars that do not end at the flat time (e.g. 30 min
+        and 15:10) still close positions there."""
+        cfg = self.cfg
+        return cfg.flat_before_break and is_last_bar_before_break(m.ts, 1, cfg.flat_time)
 
     def _close(
         self, pos: Position, price: int, ts: datetime, reason: ExitReason, slip: bool

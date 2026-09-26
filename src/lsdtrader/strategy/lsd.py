@@ -13,7 +13,7 @@ from lsdtrader.core.bar import TickBar
 from lsdtrader.core.config import StrategyConfig
 from lsdtrader.core.events import Event, EventLog
 from lsdtrader.strategy.atr import Atr
-from lsdtrader.strategy.context import LevelBook, TrendTracker, hh_hl
+from lsdtrader.strategy.context import LegTracker, LevelBook, TrendTracker, hh_hl
 from lsdtrader.strategy.liquidity import LiquidityBook, match_zones
 from lsdtrader.strategy.setups import Entry, SetupTracker
 from lsdtrader.strategy.structure import StructureTracker, h2_index, strong_level
@@ -80,6 +80,8 @@ class SideEngine:
         self._last_atr: float | None = None
         self._run_open: int | None = None  # open of the latest run of bearish minutes
         self._bearish_run = False
+        self._swings: list[tuple[int, int]] = []  # swing lows waiting for a BOS (all_before_bos)
+        self.leg = LegTracker(cfg.leg_pivot)
         self._vols: deque[float] = deque(maxlen=cfg.absorb_len)
         self._vsum = 0.0
         self._vsq = 0.0
@@ -102,14 +104,24 @@ class SideEngine:
         self._last_atr = atr
         self.zones.update(self.bars)
         swing = confirmed_swing_low(self.bars, self.cfg.piv_len)
+        # swing lows traded below before any BOS validated them never become liquidity
+        self._swings = [s for s in self._swings if bar.low >= s[1]]
+        if swing is not None:
+            self._swings.append((swing.idx, swing.price))
         for bos in self.structure.update(self.bars, swing):
             self.log.emit("bos", p_idx=bos.p_idx, l0_idx=bos.l0_idx, bos_idx=bos.bos_idx, h2=bos.h2)
             self.zones.create(self.bars, bos)
             n = self.cfg.liq_bos_pivot
-            if n == 0 or strong_level(self.bars, bos, n):
-                self.liquidity.add(bos, h2_index(self.bars, bos))
-            else:
+            if n > 0 and not strong_level(self.bars, bos, n):
                 self.log.emit("liq_weak_bos", p_idx=bos.p_idx)
+                continue
+            h2_idx = h2_index(self.bars, bos)
+            if self.cfg.liq_source == "bos_p":
+                self.liquidity.add(bos, h2_idx)
+                continue
+            for s in [s for s in self._swings if s[0] < bos.bos_idx]:
+                self.liquidity.add(bos, h2_idx, s)
+            self._swings = [s for s in self._swings if s[0] >= bos.bos_idx]
         before = self.liquidity.open
         for liq in [] if by_minute else self.liquidity.swept_by(bar):
             zones, reason = match_zones(liq, self.zones.live(), atr, self.cfg, before)
@@ -152,8 +164,9 @@ class SideEngine:
                 for z in zones:
                     self.setups.start(z, liq, i, self._last_atr, m.ts)
             score = self._volume_score(m.volume)
+            self.leg.update(m)
             if self.cfg.entry_mode == "absorption_1m":
-                entries += self.setups.on_minute_absorption(self.bars, m, score)
+                entries += self.setups.on_minute_absorption(self.bars, m, score, self.leg)
             else:
                 entries += self.setups.on_minute(self.bars, m, self._run_open)
         return entries
