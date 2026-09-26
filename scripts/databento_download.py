@@ -27,8 +27,12 @@ for sym in sys.argv[2:]:
         for attempt in range(4):
             try:
                 data = client.timeseries.get_range(
-                    dataset="GLBX.MDP3", symbols=[sym], stype_in="continuous",
-                    schema="ohlcv-1m", start=start, end=end,
+                    dataset="GLBX.MDP3",
+                    symbols=[sym],
+                    stype_in="continuous",
+                    schema="ohlcv-1m",
+                    start=start,
+                    end=end,
                 )
                 df = data.to_df(price_type="float", pretty_ts=True)
                 df = df[["open", "high", "low", "close", "volume", "instrument_id"]]
