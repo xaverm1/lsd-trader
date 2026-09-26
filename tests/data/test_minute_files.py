@@ -108,3 +108,24 @@ def test_merge_sorts_and_counts_duplicates(tmp_path: Path) -> None:
 def test_unsupported_file_type(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         load_minute_files([tmp_path / "x.txt"], SPX)
+
+
+def test_databento_csv_gz(tmp_path: Path) -> None:
+    import gzip
+
+    from lsdtrader.data.minute_files import databento_symbol, read_databento_csv
+
+    path = tmp_path / "ES_ohlcv1m_2020.csv.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        fh.write("ts_event,open,high,low,close,volume,instrument_id\n")
+        fh.write("2020-01-02 14:30:00+00:00,3240.25,3241.0,3239.75,3240.5,1234,1\n")
+    assert databento_symbol(path) == "ES" and databento_symbol(tmp_path / "x.csv") is None
+    (bar,) = read_databento_csv(path, get_instrument("ES"))
+    assert bar.ts == datetime(2020, 1, 2, 14, 30, tzinfo=UTC)
+    assert (bar.open, bar.high, bar.low, bar.close, bar.volume) == (
+        12961,
+        12964,
+        12959,
+        12962,
+        1234.0,
+    )

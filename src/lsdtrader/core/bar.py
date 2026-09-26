@@ -20,6 +20,7 @@ class TickBar:
     high: int
     low: int
     close: int
+    volume: float = 0.0  # traded volume (0 where the data has none, e.g. HistData CFDs)
 
     def __post_init__(self) -> None:
         if not (self.low <= min(self.open, self.close) and self.high >= max(self.open, self.close)):
@@ -39,4 +40,4 @@ class TickBar:
         Running the long-side rules on mirrored bars yields exactly the short-side rules
         (Strategy Spec: "a short setup is the exact mirror").
         """
-        return TickBar(self.ts, -self.open, -self.low, -self.high, -self.close)
+        return TickBar(self.ts, -self.open, -self.low, -self.high, -self.close, self.volume)

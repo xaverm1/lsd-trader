@@ -140,3 +140,42 @@ def test_sweep_tap_and_cisd_entry_inside_one_bar() -> None:
     (tr,) = [x for x in result.trades if x.side == "long"]
     assert (tr.entry_signal, tr.stop, tr.entry_ts) == (117, 110, mins[4].ts)
     assert (tr.sweep_idx, tr.tap_idx) == (15, 15)
+
+
+def absorption_bar() -> tuple[TickBar, list[TickBar]]:
+    # Bar 15 of FULL_LONG as minutes with volume: sweep of P' 113, tap of the zone top 111 with
+    # a deep wick to 107, then an absorption minute (volume 100, long lower wick, low 108,
+    # high 112) and a minute closing above its high (113).
+    t = FULL_LONG[15].ts
+    mins = [
+        TickBar(t, 115, 117, 114, 116, 10),
+        TickBar(t + timedelta(minutes=1), 116, 116, 112, 112, 10),  # sweep of 113
+        TickBar(t + timedelta(minutes=2), 112, 112, 107, 109, 10),  # tap, deepest wick 107
+        TickBar(t + timedelta(minutes=3), 111, 112, 108, 111, 100),  # absorption
+        TickBar(t + timedelta(minutes=4), 111, 114, 111, 113, 10),  # close above 112 -> entry
+    ]
+    return TickBar(t, 115, 117, 107, 113, 140), mins
+
+
+def test_absorption_entry_with_stop_at_the_deepest_wick() -> None:
+    bar, mins = absorption_bar()
+    cfg = StrategyConfig(entry_mode="absorption_1m")
+    result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, cfg)
+    (tr,) = [x for x in result.trades if x.side == "long"]
+    assert (tr.entry_signal, tr.stop, tr.entry_ts) == (113, 107, mins[4].ts)
+
+
+def test_absorption_entry_with_stop_at_the_absorption_candle() -> None:
+    bar, mins = absorption_bar()
+    cfg = StrategyConfig(entry_mode="absorption_1m", stop_ref="absorption")
+    result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, cfg)
+    (tr,) = [x for x in result.trades if x.side == "long"]
+    assert (tr.entry_signal, tr.stop) == (113, 108)
+
+
+def test_no_absorption_no_entry() -> None:
+    bar, mins = absorption_bar()
+    flat = [TickBar(m.ts, m.open, m.high, m.low, m.close, 0) for m in mins]  # no volume at all
+    cfg = StrategyConfig(entry_mode="absorption_1m")
+    result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: flat}, cfg)
+    assert [x for x in result.trades if x.side == "long"] == []

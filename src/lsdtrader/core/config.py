@@ -32,7 +32,16 @@ class StrategyConfig:
     # "sweep_1m_cisd": zones and liquidity from the strategy bars, but sweep, tap and entry on
     # 1-minute bars; entry on the first minute after the tap that closes beyond the swept
     # liquidity and beyond the CISD level.
-    entry_mode: Literal["bar", "reclaim_1m", "sweep_1m_cisd"] = "bar"
+    # "absorption_1m": like sweep_1m_cisd, but after the tap a buying-absorption minute (volume
+    # score >= absorb_min and a long lower wick, as the TradingView "Absorption Bubbles") arms
+    # the setup; entry on the first later minute closing above that minute's high, within
+    # absorb_wait_min minutes. A lower low disarms; a new absorption minute re-arms.
+    entry_mode: Literal["bar", "reclaim_1m", "sweep_1m_cisd", "absorption_1m"] = "bar"
+    absorb_min: float = 1.3  # volume / stdev(volume, absorb_len), population stdev
+    absorb_len: int = 100
+    absorb_wait_min: int = 15
+    stop_ref: Literal["extreme", "absorption"] = "extreme"  # absorption_1m: stop at the lowest
+    # low since the sweep, or at the low of the absorption minute
 
     def __post_init__(self) -> None:
         if self.piv_len < 1:

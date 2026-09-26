@@ -4,6 +4,8 @@ HistData:  zip containing DAT_ASCII_<SYMBOL>_M1_<YEAR>.csv, rows `YYYYMMDD HHMMS
            bid prices. The file clock depends on the year (see `histdata_clock`); the two
            clocks differ only in the weeks where US and EU daylight saving differ.
 Dukascopy: CSV with header `Etc/UTC,Open,High,Low,Close,Volume`, ISO timestamps in UTC.
+Databento: `<ROOT>_ohlcv1m_<YEAR>.csv.gz` (scripts/databento_download.py), header
+           `ts_event,open,high,low,close,volume,instrument_id`, UTC, with real futures volume.
 Both return 1-minute TickBars in UTC. `load_minute_files` merges files, sorts, and drops
 repeated timestamps, returning how many it dropped so the data report can show it.
 """
@@ -11,6 +13,7 @@ repeated timestamps, returning how many it dropped so the data report can show i
 from __future__ import annotations
 
 import csv
+import gzip
 import re
 import zipfile
 from collections.abc import Iterable, Sequence
@@ -99,11 +102,41 @@ def merge(chunks: Iterable[Sequence[TickBar]]) -> list[TickBar]:
     return out
 
 
+DATABENTO_NAME = re.compile(r"^([A-Z0-9]+)_ohlcv1m_\d{4}\.csv\.gz$")
+
+
+def databento_symbol(path: Path) -> str | None:
+    """Instrument root of a Databento download, e.g. ES, or None for other files."""
+    m = DATABENTO_NAME.match(path.name)
+    return m.group(1) if m else None
+
+
+def read_databento_csv(path: Path, inst: Instrument) -> list[TickBar]:
+    with gzip.open(path, "rt", encoding="utf-8", newline="") as fh:
+        rows = csv.reader(fh)
+        header = next(rows)
+        if header[:6] != ["ts_event", "open", "high", "low", "close", "volume"]:
+            raise ValueError(f"{path.name}: unexpected Databento header {header}")
+        return [
+            TickBar(
+                datetime.fromisoformat(ts).astimezone(UTC),
+                inst.to_ticks(o),
+                inst.to_ticks(h),
+                inst.to_ticks(lo),
+                inst.to_ticks(c),
+                float(v),
+            )
+            for ts, o, h, lo, c, v, *_ in rows
+        ]
+
+
 def load_minute_files(paths: Sequence[Path], inst: Instrument) -> tuple[list[TickBar], int]:
     """Merged 1-minute bars and the number of duplicate timestamps dropped."""
     chunks: list[list[TickBar]] = []
     for p in paths:
-        if p.suffix.lower() == ".zip":
+        if databento_symbol(p):
+            chunks.append(read_databento_csv(p, inst))
+        elif p.suffix.lower() == ".zip":
             chunks.append(read_histdata_zip(p, inst))
         elif p.suffix.lower() == ".csv":
             chunks.append(read_dukascopy_csv(p, inst))

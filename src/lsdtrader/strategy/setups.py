@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from lsdtrader.core.bar import TickBar
 from lsdtrader.core.config import StrategyConfig
@@ -24,6 +24,10 @@ class Setup:
     tap_idx: int | None = None
     low: int | None = None  # sweep_1m_cisd: lowest low since the sweep
     cisd: int | None = None  # sweep_1m_cisd: open of the bearish run that made `low`
+    abs_high: int | None = None  # absorption_1m: armed absorption minute
+    abs_low: int | None = None
+    abs_ts: datetime | None = None
+    abs_score: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +101,7 @@ class SetupTracker:
         if z.state != "left":
             self._log.emit("setup_zone_gone", setup_id=s.setup_id, zone_state=z.state)
             return False
-        if cfg.entry_mode == "sweep_1m_cisd":  # tap and entry happen in on_minute
+        if cfg.entry_mode in ("sweep_1m_cisd", "absorption_1m"):  # tap and entry: on_minute
             if s.tap_idx is None and i - s.sweep_idx >= cfg.max_bars_sweep_to_tap:
                 self._log.emit("no_tap", setup_id=s.setup_id)
                 return False
@@ -147,6 +151,40 @@ class SetupTracker:
                 keep.append(s)
             else:
                 entries.append(entry)
+        self._pending = keep
+        return entries
+
+    def on_minute_absorption(
+        self, bars: Sequence[TickBar], m: TickBar, score: float
+    ) -> list[Entry]:
+        """absorption_1m: advance setups by one minute (see StrategyConfig.entry_mode)."""
+        cfg, i = self._cfg, len(bars)
+        entries: list[Entry] = []
+        keep: list[Setup] = []
+        wait = timedelta(minutes=cfg.absorb_wait_min)
+        for s in self._pending:
+            z = s.zone
+            if z.state == "left":
+                if s.low is None or m.low < s.low:
+                    s.low = m.low
+                    s.abs_high = None  # a lower low: the absorption failed
+                if s.tap_idx is None and m.low <= z.top + cfg.tap_tol_ticks:
+                    s.tap_idx = i
+                    self._log.emit("tap", setup_id=s.setup_id)
+                if s.tap_idx is not None:
+                    if s.abs_high is not None and m.close > s.abs_high:
+                        assert s.abs_low is not None
+                        stop = s.low if cfg.stop_ref == "extreme" else s.abs_low
+                        entry = self._enter(bars, s, i, m.close, stop, m.ts)
+                        entry.features["abs_score"] = s.abs_score
+                        entries.append(entry)
+                        continue
+                    if s.abs_ts is not None and s.abs_high is not None and m.ts - s.abs_ts >= wait:
+                        s.abs_high = None
+                    lower_wick = m.high + m.low <= 2 * min(m.open, m.close)
+                    if score >= cfg.absorb_min and lower_wick:
+                        s.abs_high, s.abs_low, s.abs_ts, s.abs_score = m.high, m.low, m.ts, score
+            keep.append(s)
         self._pending = keep
         return entries
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -78,11 +80,14 @@ class SideEngine:
         self._last_atr: float | None = None
         self._run_open: int | None = None  # open of the latest run of bearish minutes
         self._bearish_run = False
+        self._vols: deque[float] = deque(maxlen=cfg.absorb_len)
+        self._vsum = 0.0
+        self._vsq = 0.0
 
     def on_bar(self, bar: TickBar, minutes: Sequence[TickBar] | None = None) -> list[Entry]:
         """`minutes` (this bar's 1-minute bars, same side) feed reclaim entries."""
         early: list[Entry] = []
-        by_minute = self.cfg.entry_mode == "sweep_1m_cisd" and bool(minutes)
+        by_minute = self.cfg.entry_mode in ("sweep_1m_cisd", "absorption_1m") and bool(minutes)
         if self.cfg.entry_mode == "reclaim_1m" and minutes:
             early = self.setups.minute_entries(self.bars, minutes)
         elif by_minute:
@@ -138,8 +143,27 @@ class SideEngine:
                     self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
                 for z in zones:
                     self.setups.start(z, liq, i, self._last_atr)
-            entries += self.setups.on_minute(self.bars, m, self._run_open)
+            score = self._volume_score(m.volume)
+            if self.cfg.entry_mode == "absorption_1m":
+                entries += self.setups.on_minute_absorption(self.bars, m, score)
+            else:
+                entries += self.setups.on_minute(self.bars, m, self._run_open)
         return entries
+
+    def _volume_score(self, v: float) -> float:
+        """Volume / population stdev of the last absorb_len minute volumes (incl. this one),
+        as ta.stdev in the TradingView "Absorption Bubbles" indicator."""
+        q = self._vols
+        if len(q) == q.maxlen:
+            old = q[0]
+            self._vsum -= old
+            self._vsq -= old * old
+        q.append(v)
+        self._vsum += v
+        self._vsq += v * v
+        n = len(q)
+        var = max(self._vsq / n - (self._vsum / n) ** 2, 0.0)
+        return v / math.sqrt(var) if var > 0 else 0.0
 
     def _context(self, e: Entry, trend: dict[int, int]) -> dict[str, object]:
         out: dict[str, object] = {f"trend_bos{n}": v for n, v in trend.items()}

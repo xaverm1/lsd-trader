@@ -47,6 +47,7 @@ def to_bars(
             max(m.high for m in group),
             min(m.low for m in group),
             group[-1].close,
+            sum(m.volume for m in group),
         )
         for start, group in groups.items()
     ]

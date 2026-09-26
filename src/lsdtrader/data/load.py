@@ -10,7 +10,7 @@ from pathlib import Path
 from lsdtrader.core.bar import TickBar
 from lsdtrader.core.instrument import Instrument, get_instrument
 from lsdtrader.data.aggregate import to_bars
-from lsdtrader.data.minute_files import histdata_symbol, load_minute_files
+from lsdtrader.data.minute_files import databento_symbol, histdata_symbol, load_minute_files
 from lsdtrader.data.tradingview import load_tradingview_json
 
 
@@ -31,6 +31,7 @@ def load_data(files: Sequence[Path], instrument: str | None, bar_minutes: int = 
         inst, bars = load_tradingview_json(files[0])
         return LoadedData(inst, bars, None, [], "tradingview 5m")
     symbols = {histdata_symbol(f) for f in files if f.suffix.lower() == ".zip"}
+    symbols |= {s for f in files if (s := databento_symbol(f))}
     if len(symbols) > 1:
         raise SystemExit(f"files are for different instruments: {sorted(symbols)}")
     if instrument is None:
