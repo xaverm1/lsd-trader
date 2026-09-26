@@ -106,8 +106,9 @@ class SideEngine:
             self.log.emit("bos", p_idx=bos.p_idx, bos_idx=bos.bos_idx, h2=bos.h2)
             self.zones.create(self.bars, bos)
             self.liquidity.add(bos)
+        before = self.liquidity.open
         for liq in [] if by_minute else self.liquidity.swept_by(bar):
-            zones, reason = match_zones(liq, self.zones.live(), atr, self.cfg)
+            zones, reason = match_zones(liq, self.zones.live(), atr, self.cfg, before)
             if reason is not None:
                 self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
             for z in zones:
@@ -137,8 +138,11 @@ class SideEngine:
                 self._bearish_run = True
             else:
                 self._bearish_run = False
+            before = self.liquidity.open
             for liq in self.liquidity.swept_by(m):
-                zones, reason = match_zones(liq, self.zones.live(), self._last_atr, self.cfg)
+                zones, reason = match_zones(
+                    liq, self.zones.live(), self._last_atr, self.cfg, before
+                )
                 if reason is not None:
                     self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
                 for z in zones:

@@ -52,3 +52,20 @@ def test_one_sweep_can_arm_stacked_zones() -> None:
     lower, upper = zone(o_idx=0, top=104, bot=100), zone(o_idx=2, top=111, bot=106)
     matched, reason = match_zones(liq(), [lower, upper], None, StrategyConfig())
     assert reason is None and matched == [lower, upper]
+
+
+def test_nearest_rule_skips_liquidity_with_a_closer_swing_in_between() -> None:
+    cfg = StrategyConfig(liq_rule="nearest")
+    near, far = liq(idx=11, price=113), liq(idx=12, price=118)
+    before = [near, far]
+    assert match_zones(far, [zone()], None, cfg, before)[1] == "too_far"
+    assert match_zones(near, [zone()], None, cfg, before) == ([zone()], None)
+    # the far one counts once the near one is gone, or under the default rule
+    assert match_zones(far, [zone()], None, cfg, [far])[1] is None
+    assert match_zones(far, [zone()], None, StrategyConfig(), before)[1] is None
+
+
+def test_nearest_rule_ignores_swings_older_than_the_zone() -> None:
+    cfg = StrategyConfig(liq_rule="nearest")
+    old, far = liq(idx=0, price=113), liq(idx=12, price=118)
+    assert match_zones(far, [zone(o_idx=3)], None, cfg, [old, far])[1] is None

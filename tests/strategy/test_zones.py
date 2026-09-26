@@ -118,6 +118,15 @@ def test_close_beyond_variant_only_kills_on_close_below() -> None:
     assert zone.state == "destroyed"
 
 
+def test_wick_beyond_variant_kills_on_any_trade_below() -> None:
+    cfg = StrategyConfig(zone_kill="wick_beyond")
+    (zone,), book, _ = create(make_bars(*LEFT), cfg=cfg)
+    book.update(make_bars(*LEFT, (124, 124, 108, 111)))  # close inside: still alive
+    assert zone.state == "left"
+    book.update(make_bars(*LEFT, (124, 124, 108, 111), (111, 113, 99, 112)))
+    assert zone.state == "destroyed"
+
+
 def test_consume_after_max_trades() -> None:
     (zone,), book, _ = create(make_bars(*LEFT))
     book.consume(zone)

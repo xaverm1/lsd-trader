@@ -164,6 +164,7 @@ class SetupTracker:
         wait = timedelta(minutes=cfg.absorb_wait_min)
         for s in self._pending:
             z = s.zone
+            self._zones.kill_by_minute(z, m)
             if z.state == "left":
                 if s.low is None or m.low < s.low:
                     s.low = m.low
@@ -204,6 +205,7 @@ class SetupTracker:
         keep: list[Setup] = []
         for s in self._pending:
             z = s.zone
+            self._zones.kill_by_minute(z, m)
             if z.state == "left":
                 if s.low is None or m.low < s.low:
                     s.low, s.cisd = m.low, run_open

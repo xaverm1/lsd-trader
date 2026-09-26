@@ -15,8 +15,14 @@ class StrategyConfig:
     doji_tol_ticks: int = 0
     zone_mode: Literal["auto", "normal"] = "auto"
     extra_zones: Literal["none", "last", "all"] = "none"
-    zone_kill: Literal["close_inside", "close_beyond"] = "close_inside"
+    # close_inside: a close inside the zone or a wick below it; close_beyond: a close below it;
+    # wick_beyond: any trade below the zone (a close below included), checked every minute in
+    # the 1-minute entry modes
+    zone_kill: Literal["close_inside", "close_beyond", "wick_beyond"] = "close_inside"
     liq_max_dist_atr: float | None = None
+    # any: every unswept swing low above a left zone is liquidity for it; nearest: only the one
+    # closest to the zone (no other open swing low formed after the zone origin in between)
+    liq_rule: Literal["any", "nearest"] = "any"
     atr_len: int = 14
     max_bars_sweep_to_tap: int = 12  # one hour of 5-minute bars (Spec §7)
     tap_tol_ticks: int = 0

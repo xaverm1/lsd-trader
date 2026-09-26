@@ -179,3 +179,17 @@ def test_no_absorption_no_entry() -> None:
     cfg = StrategyConfig(entry_mode="absorption_1m")
     result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: flat}, cfg)
     assert [x for x in result.trades if x.side == "long"] == []
+
+
+def test_absorption_zone_dies_on_a_minute_wick_below_it() -> None:
+    # same minutes, but the tap wicks to 105, below the zone bottom 106
+    bar, mins = absorption_bar()
+    m = mins[2]
+    mins[2] = TickBar(m.ts, m.open, m.high, 105, m.close, m.volume)
+    bar = TickBar(bar.ts, bar.open, bar.high, 105, bar.close, bar.volume)
+    kill = StrategyConfig(entry_mode="absorption_1m", zone_kill="wick_beyond")
+    result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, kill)
+    assert [x for x in result.trades if x.side == "long"] == []
+    keep = StrategyConfig(entry_mode="absorption_1m", zone_kill="close_beyond")
+    result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, keep)
+    assert len([x for x in result.trades if x.side == "long"]) == 1

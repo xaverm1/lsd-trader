@@ -11,6 +11,7 @@ from lsdtrader.strategy.zones import Zone
 
 # Furthest stage a sweep reached without finding a zone, in order.
 NO_SETUP_REASONS = ("no_zone_below", "zone_not_left", "liq_before_zone", "too_far")
+# (liq_rule="nearest" rejections are reported as "too_far" as well)
 
 
 @dataclass(slots=True)
@@ -45,9 +46,17 @@ class LiquidityBook:
 
 
 def match_zones(
-    liq: Liquidity, zones: list[Zone], atr: float | None, cfg: StrategyConfig
+    liq: Liquidity,
+    zones: list[Zone],
+    atr: float | None,
+    cfg: StrategyConfig,
+    open_before: list[Liquidity] | None = None,
 ) -> tuple[list[Zone], str | None]:
-    """Zones for which `liq` is valid liquidity, or the reason there are none."""
+    """Zones for which `liq` is valid liquidity, or the reason there are none.
+
+    `open_before`: the liquidity that was unswept before this bar or minute (for
+    liq_rule="nearest": another of these between the zone and `liq` makes `liq` too far).
+    """
     stage = 0
     matched: list[Zone] = []
     for z in zones:
@@ -62,6 +71,11 @@ def match_zones(
         stage = max(stage, 3)
         limit = cfg.liq_max_dist_atr
         if limit is not None and (atr is None or liq.price - z.top > limit * atr):
+            continue
+        if cfg.liq_rule == "nearest" and any(
+            o is not liq and o.idx > z.o_idx and z.top < o.price < liq.price
+            for o in open_before or []
+        ):
             continue
         matched.append(z)
     if matched:
