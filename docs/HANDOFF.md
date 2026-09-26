@@ -1,5 +1,7 @@
 # Handoff: current state and next steps (2026-09-25)
 
+> Kurzfassung für einen neuen Agenten: `docs/HANDOFF_AGENT.md` (Deutsch, aktueller Stand).
+
 Read this first when picking the project up in a new (cloud) session.
 
 ## Setup
