@@ -338,6 +338,15 @@ minute too). NQ 2026 test runs with `liq_rule=nearest`: N=2 174 trades (gross +0
 Next idea from Xaver: vary the time allowed from the sweep to the entry (now 12 strategy bars
 sweep to tap, 3 bars tap to entry, 15 minutes absorption to entry).
 
+Sweep-to-tap window (`--set max_min_sweep_to_tap=M`, minutes from the sweep minute to the
+tap minute; feature `min_sweep_to_tap`). NQ 2026 test runs (nearest, close_inside,
+liq_bos_pivot=2, max_bars_sweep_to_tap=48 as backstop), net R per trade: 15 min +0.565 (75 T),
+30 +0.456 (94), 60 +0.389 (114), 120 +0.341 (139), 240 +0.174 (158), 480 +0.150 (174),
+1440 +0.131 (194). Sweep-to-tap minutes in the 1440 run: median 43, mean 224 (skewed), 75 %
+283. By bucket: tap in the sweep minute +0.77 (25), 1-15 min +0.41 (45), 15-60 +0.22 (36),
+60-240 -0.15 (38), over 240 -0.29 (50). Caution: 2026 is the year whose charts shaped the
+rules, so it is in-sample; the check is 2010-2025 on NQ and ES.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
