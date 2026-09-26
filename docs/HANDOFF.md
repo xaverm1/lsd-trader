@@ -274,22 +274,48 @@ fixed 6R +0.125. Break-even at -1 does not help (it turns winners into scratches
 often as it saves losers). The earlier +0.144 for "50/50 with BE" came from the MFE shortcut
 and was too optimistic; the exact replay gives +0.095. Nothing significant.
 
-### Next: Databento futures data with volume (2026-09-26)
+### Absorption entry on ES / NQ futures with volume (Databento, 2026-09-26)
 
-Xaver now trades 30m zones with a 1-minute entry tied to the absorption-bubble indicator
-(TradingView, volume / stdev(volume, 100) plus wick rule, volume taken from the mini). HistData
-has no volume, so this entry cannot be tested yet. Plan for the next session:
-1. `DATABENTO_API_KEY` is set as an environment variable (never paste it into chat). Check
-   `echo ${DATABENTO_API_KEY:+yes}`; hist.databento.com is reachable (401 without key).
-2. Dataset GLBX.MDP3, schema ohlcv-1m, continuous volume-roll symbols ES.v.0 and NQ.v.0
-   (stype_in=continuous). Ask `metadata.get_cost` first and stay inside the $125 sign-up
-   credits (expire 6 months after sign-up). As far back as the credits allow.
-3. Store per year, compressed, in lsd-trader-data (e.g. `databento/ES_ohlcv1m_2019.csv.zst`),
-   update its README. Never into the public repo.
-4. Add a loader for the Databento CSV (UTC timestamps, prices in fixed-point 1e-9 unless
-   pretty_px), then rebuild the bubble logic and test the entry "close above the absorption
-   candle" with stop at its low, targets fixed R and leg levels (-2/-4), with and without
-   break-even.
+Data: Databento GLBX.MDP3 ohlcv-1m, ES.v.0 and NQ.v.0 (volume roll), 2010-01 to 2026-09-25,
+in lsd-trader-data `databento/<ROOT>_ohlcv1m_<YEAR>.csv.gz` (UTC, loaded like HistData files;
+`scripts/databento_download.py` reads the key only from `DATABENTO_API_KEY`). Cost about
+$21 per symbol.
+
+Run: `lsd backtest DATA/databento/NQ_ohlcv1m_20*.csv.gz --timeframe 30 --hold-overnight
+--set entry_mode=absorption_1m --set stop_ref=extreme|absorption`. 30m zones and
+liquidity; sweep, tap and the absorption minute (volume / population stdev of the last 100
+minute volumes >= 1.3, lower wick rule as the TradingView Absorption Bubbles) on 1-minute
+bars; entry at the first later minute closing above the absorption high within 15 minutes.
+Stop at the deepest wick since the sweep (`extreme`, Xaver's live stop) or at the absorption
+minute's low (`absorption`). Several zones can share one sweep and fire the same entry
+minute (about 8 %); the reports keep one trade per minute and side. Costs: instrument spec
+(commission + 1 tick per side), in R of each trade.
+
+`scripts/absorption_report.py` (whole period, all of it looked at, so no untouched hold-out):
+
+| | N | median stop | TP 2R gross / net | TP 4R gross / net (t) |
+|---|---|---|---|---|
+| NQ extreme | 5585 | 8.0 pt | -0.026 / -0.182 | -0.005 / -0.161 (-5.5) |
+| NQ absorption | 5585 | 5.75 pt | -0.025 / -0.236 | +0.013 / -0.198 (-6.6) |
+| ES extreme | 5851 | 2.5 pt | -0.089 / -0.378 | -0.107 / -0.396 (-15.2) |
+| ES absorption | 5851 | 1.75 pt | -0.138 / -0.513 | -0.161 / -0.536 (-20.7) |
+
+- NQ is zero before costs; ES is significantly negative even before costs (gross t -4 to
+  -8). The stop at the absorption low is worse than at the deepest wick on ES and no better
+  on NQ; tighter stops only raise the cost in R.
+- No year of ES is positive net; NQ net positive only 2022 (+0.13) and 2026 (+0.00).
+- Bubble strength does not sort: score 5+ is flat (N 346 / 374), 1.3-5 no better.
+- Larger stops lose less net only because costs fall in R; gross is flat across quartiles.
+- Leg targets (sd_be logic, deduped, with cost): NQ TP -4 +0.143 gross but -0.014 net,
+  half of the gross sum from the 10 best trades, and it drops to +0.069 gross when trades are
+  closed after 24 h; ES TP -2/-4 negative gross. Break-even at -1 again does not help.
+- Charts: `scripts/trade_charts.py RUN --latest 10 --random 10` (Berlin time, continuous
+  front contract prices); spot checks on NQ and ES show sweep, tap, absorption minute,
+  trigger and stop placed as intended.
+
+Conclusion: the absorption entry as coded has no edge on ES or NQ 2010-2026 before or after
+costs. Open question for Xaver: which part of the live entry differs from this rule (compare
+the latest trades in the chart files with TradingView).
 
 ## Working rules
 
