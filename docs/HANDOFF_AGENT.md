@@ -233,3 +233,9 @@ Technisch offen:
 | `src/lsdtrader/data/minute_files.py` | Loader HistData und Databento |
 | `scripts/*.py` | Auswertungen (siehe Kopf jeder Datei) |
 | `docs/HANDOFF.md` | vollständige Chronik aller Tests (Englisch) |
+
+**ES 2010-2024, aktueller Regelstand (27.09.2026, out-of-sample, Regeln aus NQ 2026):** 3089
+Trades (206/Jahr), Median-Stop 2,25 Punkte (9 Ticks), Kosten im Median 0,24 R. Brutto 2R/3R/4R/6R
+-0,09/-0,10/-0,11/-0,10 R (t -3 bis -4), netto -0,40/-0,41/-0,41/-0,41 R; jedes Jahr netto negativ.
+Vorher festgelegter Test Abstandsgrenze (Auswahl 2010-2017, Prüfung 2018-2024, 3R): keine der
+Grenzen 2,0/2,5/3,0 ATR schlägt "keine Grenze" um 0,05 R -> kein Filter. Kein Vorteil auf ES.
