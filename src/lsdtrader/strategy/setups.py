@@ -177,6 +177,9 @@ class SetupTracker:
                         stop = s.low if cfg.stop_ref == "extreme" else s.abs_low
                         entry = self._enter(bars, s, i, m.close, stop, m.ts)
                         entry.features["abs_score"] = s.abs_score
+                        entry.features["abs_ts"] = s.abs_ts  # absorption minute
+                        entry.features["abs_high"] = s.abs_high  # side space: negated for shorts
+                        entry.features["abs_low"] = s.abs_low
                         entries.append(entry)
                         continue
                     if s.abs_ts is not None and s.abs_high is not None and m.ts - s.abs_ts >= wait:
