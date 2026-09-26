@@ -113,7 +113,7 @@ D=data/databento
   --timeframe 30 --flat-only \
   --set entry_mode=absorption_1m --set liq_rule=nearest --set zone_kill=close_inside \
   --set liq_bos_pivot=1 --set liq_source=bos_p --set liq_min_leg_atr=1.0 \
-  --set tp_mode=rr --set rr=4
+  --set max_min_sweep_to_tap=180 --set tp_mode=rr --set rr=4
 ```
 
 Stand 26.09. abends: Liquidität nur noch mit eigenem BOS (`bos_p`, Variante 2 verworfen: ein
