@@ -29,7 +29,12 @@ ap.add_argument("--seed", type=int, default=3)
 ap.add_argument("--since", default="2000-01-01")
 ap.add_argument("--until", default="2100-01-01")
 ap.add_argument("--name", default="setup_judge")
+ap.add_argument("--trend", action="store_true", help="only ask: trend with / against / sideways")
+ap.add_argument("--exclude", nargs="*", type=Path, default=[], help="judgement JSONs already shown")
 args = ap.parse_args()
+shown = {
+    (s["entry_utc"], s["side"]) for f in args.exclude for s in json.loads(f.read_text())["setups"]
+}
 
 run = load_run(args.run)
 inst, bars = run.data.instrument, run.data.bars
@@ -37,7 +42,8 @@ px = inst.to_price
 trades, seen = [], set()
 for t in sorted(run.trades, key=lambda t: t["entry_ts"]):
     day = t["entry_ts"].date().isoformat()
-    if (t["entry_ts"], t["side"]) not in seen and args.since <= day <= args.until:
+    new = (t["entry_ts"].isoformat(), t["side"]) not in shown
+    if (t["entry_ts"], t["side"]) not in seen and new and args.since <= day <= args.until:
         seen.add((t["entry_ts"], t["side"]))
         trades.append(t)
 picked = sorted(
@@ -118,20 +124,19 @@ textarea{width:100%;height:50px;font-size:13px}
 <header>
   <button id="prev">&larr;</button><b id="title"></b><button id="next">&rarr;</button>
   <span class="muted" id="count"></span>
-  <button id="yes" class="yes">genommen (J)</button>
-  <button id="no" class="no">nicht genommen (N)</button>
+  <span id="choices"></span>
   <button id="dl" style="margin-left:auto">Download</button>
 </header>
 <div id="wrap">
   <canvas id="c"></canvas>
-  <div class="muted" style="margin-top:6px">Bei "nicht genommen": Gründe anklicken (mehrere möglich), gern auch bei "genommen", wenn etwas stört.</div>
+  <div class="muted" style="margin-top:6px">__HINT__</div>
   <div id="tags"></div>
   <textarea id="note" placeholder="Notiz (optional)"></textarea>
   <p class="muted">Violett: Zone. Orange gepunktet: Liquidität des Codes, grau gestrichelt: das Level, dessen Bruch sie gemacht hat. Dreieck: Sweep, Raute: Tap, Pfeil: Einstieg, rot: Stop.
-  Mausrad zoomt, ziehen verschiebt, Doppelklick zeigt alles, Pfeiltasten wechseln, J/N beurteilen. Alles wird im Browser gespeichert; am Ende "Download".</p>
+  Mausrad zoomt, ziehen verschiebt, Doppelklick zeigt alles, Pfeiltasten wechseln, die Buchstaben in Klammern beurteilen. Alles wird im Browser gespeichert; am Ende "Download".</p>
 </div>
 <script>
-const DATA = __DATA__, REASONS = __REASONS__, KEY = "judge_" + __RUN__;
+const DATA = __DATA__, REASONS = __REASONS__, CHOICES = __CHOICES__, KEY = __KEY__ + __RUN__;
 let store = {}; try { store = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
 let cur = 0, view = null, drag = null;
@@ -170,7 +175,7 @@ function draw() {
   mk(ei, s.y(ep), "#222", (x, y) => { ctx.moveTo(x + 4, y); ctx.lineTo(x + 14, y - 6); ctx.lineTo(x + 14, y + 6); });
   document.getElementById("title").textContent = d.title;
   document.getElementById("count").textContent = `(${cur + 1} / ${DATA.length}, beurteilt: ${Object.values(store).filter(v => v.take !== null).length})`;
-  document.getElementById("yes").classList.toggle("on", r.take === true); document.getElementById("no").classList.toggle("on", r.take === false);
+  CHOICES.forEach((c, k) => document.getElementById("ch" + k).classList.toggle("on", r.take === c[0]));
   document.querySelectorAll("#tags button").forEach(b => b.classList.toggle("on", r.reasons.includes(b.textContent)));
   document.getElementById("note").value = r.note || "";
 }
@@ -178,12 +183,13 @@ const tags = document.getElementById("tags");
 REASONS.forEach(t => { const b = document.createElement("button"); b.className = "tag"; b.textContent = t;
   b.onclick = () => { const r = rec(); r.reasons = r.reasons.includes(t) ? r.reasons.filter(x => x !== t) : [...r.reasons, t]; save(); draw(); }; tags.appendChild(b); });
 const judge = v => { const r = rec(); r.take = r.take === v ? null : v; save(); draw(); };
-document.getElementById("yes").onclick = () => judge(true); document.getElementById("no").onclick = () => judge(false);
+CHOICES.forEach((c, k) => { const b = document.createElement("button"); b.id = "ch" + k; b.className = c[3]; b.textContent = c[1];
+  b.style.marginRight = "6px"; b.onclick = () => judge(c[0]); document.getElementById("choices").appendChild(b); });
 document.getElementById("note").oninput = e => { rec().note = e.target.value; save(); };
 const go = k => { cur = (cur + k + DATA.length) % DATA.length; fit(); draw(); };
 document.getElementById("prev").onclick = () => go(-1); document.getElementById("next").onclick = () => go(1);
 document.addEventListener("keydown", e => { if (e.target.tagName === "TEXTAREA") return;
-  if (e.key === "ArrowRight") go(1); if (e.key === "ArrowLeft") go(-1); if (e.key === "j" || e.key === "J") judge(true); if (e.key === "n" || e.key === "N") judge(false); });
+  if (e.key === "ArrowRight") go(1); if (e.key === "ArrowLeft") go(-1); CHOICES.forEach(c => { if (e.key.toLowerCase() === c[2]) judge(c[0]); }); });
 cv.addEventListener("mousedown", ev => { drag = {x: ev.offsetX, a: view.a, b: view.b}; });
 window.addEventListener("mouseup", () => { drag = null; });
 cv.addEventListener("mousemove", ev => { if (!drag) return; const s = scales(layout()), n = S().bars.length, w = drag.b - drag.a;
@@ -193,15 +199,39 @@ cv.addEventListener("wheel", ev => { ev.preventDefault(); const s = scales(layou
   a = Math.min(Math.max(a, 0), n - 1 - nw); view = {a, b: a + nw}; draw(); }, {passive: false});
 cv.addEventListener("dblclick", () => { view = {a: 0, b: S().bars.length - 1}; draw(); });
 document.getElementById("dl").onclick = () => { const out = DATA.map(d => ({id: d.id, side: d.side, entry_utc: d.entry_utc, ...(store[d.id] || {take: null, reasons: [], note: ""})}));
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({run: __RUN__, setups: out}, null, 1)], {type: "application/json"})); a.download = "setup_judgements.json"; a.click(); };
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({run: __RUN__, setups: out}, null, 1)], {type: "application/json"})); a.download = __FILE__; a.click(); };
 window.addEventListener("resize", draw); fit(); draw();
 </script></html>"""
 
+if args.trend:
+    mode = {
+        "__CHOICES__": [
+            ["mit", "mit dem Trend (M)", "m", "yes"],
+            ["gegen", "gegen den Trend (G)", "g", "no"],
+            ["seitwärts", "seitwärts / unklar (S)", "s", "tag"],
+        ],
+        "__REASONS__": [],
+        "__KEY__": "trend_",
+        "__FILE__": "trend_judgements.json",
+    }
+    hint = "Nur eine Frage: Wie ist der Trend für diesen Trade (in Richtung des Trades gesehen)?"
+else:
+    mode = {
+        "__CHOICES__": [
+            [True, "genommen (J)", "j", "yes"],
+            [False, "nicht genommen (N)", "n", "no"],
+        ],
+        "__REASONS__": REASONS,
+        "__KEY__": "judge_",
+        "__FILE__": "setup_judgements.json",
+    }
+    hint = 'Bei "nicht genommen": Gründe anklicken (mehrere möglich), gern auch bei "genommen", wenn etwas stört.'
+html = PAGE.replace("__DATA__", json.dumps(setups)).replace("__RUN__", json.dumps(args.run.name))
+for key, value in mode.items():
+    html = html.replace(key, json.dumps(value, ensure_ascii=False))
 out = args.run / f"{args.name}.html"
 out.write_text(
-    PAGE.replace("__DATA__", json.dumps(setups))
-    .replace("__REASONS__", json.dumps(REASONS, ensure_ascii=False))
-    .replace("__RUN__", json.dumps(args.run.name)),
+    html.replace("__HINT__", hint),
     encoding="utf-8",
 )
 print(out, len(setups), "setups")
