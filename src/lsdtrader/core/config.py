@@ -28,6 +28,9 @@ class StrategyConfig:
     liq_bos_pivot: int = 0
     atr_len: int = 14
     max_bars_sweep_to_tap: int = 12  # one hour of 5-minute bars (Spec §7)
+    # 1-minute entry modes: the tap must come at most this many minutes after the sweep minute
+    # (None: only max_bars_sweep_to_tap applies)
+    max_min_sweep_to_tap: int | None = None
     tap_tol_ticks: int = 0
     max_bars_tap_to_entry: int = 3
     entry_trigger: Literal["bullish", "above_tap_high", "above_liq", "min_body"] = "bullish"
@@ -73,6 +76,8 @@ class StrategyConfig:
         ):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must be >= 0")
+        if self.max_min_sweep_to_tap is not None and self.max_min_sweep_to_tap < 0:
+            raise ValueError("max_min_sweep_to_tap must be >= 0 or None")
         if self.min_body_ticks < 1:
             raise ValueError("min_body_ticks must be >= 1")
         if self.rr <= 0:

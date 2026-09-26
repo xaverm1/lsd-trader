@@ -150,7 +150,7 @@ class SideEngine:
                 if reason is not None:
                     self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
                 for z in zones:
-                    self.setups.start(z, liq, i, self._last_atr)
+                    self.setups.start(z, liq, i, self._last_atr, m.ts)
             score = self._volume_score(m.volume)
             if self.cfg.entry_mode == "absorption_1m":
                 entries += self.setups.on_minute_absorption(self.bars, m, score)

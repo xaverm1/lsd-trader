@@ -28,6 +28,8 @@ class Setup:
     abs_low: int | None = None
     abs_ts: datetime | None = None
     abs_score: float | None = None
+    sweep_ts: datetime | None = None  # 1-minute modes: minute of the sweep
+    tap_ts: datetime | None = None  # 1-minute modes: minute of the tap
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,12 +63,19 @@ class SetupTracker:
     def pending(self) -> list[Setup]:
         return list(self._pending)
 
-    def start(self, zone: Zone, liq: Liquidity, sweep_idx: int, atr: float | None) -> Setup | None:
+    def start(
+        self,
+        zone: Zone,
+        liq: Liquidity,
+        sweep_idx: int,
+        atr: float | None,
+        sweep_ts: datetime | None = None,
+    ) -> Setup | None:
         """Start a setup unless the zone already has one running."""
         if any(s.zone is zone for s in self._pending):
             self._log.emit("setup_already_running", zone_id=zone.zone_id, liq_idx=liq.idx)
             return None
-        setup = Setup(self._next_id, zone, liq, sweep_idx, atr)
+        setup = Setup(self._next_id, zone, liq, sweep_idx, atr, sweep_ts=sweep_ts)
         self._next_id += 1
         self._pending.append(setup)
         self._log.emit(
@@ -169,8 +178,10 @@ class SetupTracker:
                 if s.low is None or m.low < s.low:
                     s.low = m.low
                     s.abs_high = None  # a lower low: the absorption failed
+                if self._tap_too_late(s, m):
+                    continue
                 if s.tap_idx is None and m.low <= z.top + cfg.tap_tol_ticks:
-                    s.tap_idx = i
+                    s.tap_idx, s.tap_ts = i, m.ts
                     self._log.emit("tap", setup_id=s.setup_id)
                 if s.tap_idx is not None:
                     if s.abs_high is not None and m.close > s.abs_high:
@@ -209,8 +220,10 @@ class SetupTracker:
             if z.state == "left":
                 if s.low is None or m.low < s.low:
                     s.low, s.cisd = m.low, run_open
+                if self._tap_too_late(s, m):
+                    continue
                 if s.tap_idx is None and m.low <= z.top + self._cfg.tap_tol_ticks:
-                    s.tap_idx = i
+                    s.tap_idx, s.tap_ts = i, m.ts
                     self._log.emit("tap", setup_id=s.setup_id)
                 level = max(s.liq.price, s.cisd if s.cisd is not None else s.liq.price)
                 if s.tap_idx is not None and m.close > level:
@@ -221,6 +234,16 @@ class SetupTracker:
             keep.append(s)
         self._pending = keep
         return entries
+
+    def _tap_too_late(self, s: Setup, m: TickBar) -> bool:
+        """max_min_sweep_to_tap: no tap yet and the window since the sweep minute has passed."""
+        limit = self._cfg.max_min_sweep_to_tap
+        if limit is None or s.tap_idx is not None or s.sweep_ts is None:
+            return False
+        if m.ts - s.sweep_ts > timedelta(minutes=limit):
+            self._log.emit("no_tap", setup_id=s.setup_id)
+            return True
+        return False
 
     def _triggered(self, bars: Sequence[TickBar], s: Setup, i: int) -> bool:
         bar = bars[i]
@@ -271,6 +294,8 @@ class SetupTracker:
             "bars_tap_to_entry": i - s.tap_idx,
             "stop_ticks": risk,
         }
+        if s.sweep_ts is not None and s.tap_ts is not None:
+            features["min_sweep_to_tap"] = (s.tap_ts - s.sweep_ts).total_seconds() / 60
         result = Entry(
             s.setup_id,
             i,

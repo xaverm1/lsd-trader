@@ -195,3 +195,13 @@ def test_absorption_zone_dies_on_a_minute_wick_below_it() -> None:
     keep = StrategyConfig(entry_mode="absorption_1m", zone_kill="close_beyond")
     result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, keep)
     assert len([x for x in result.trades if x.side == "long"]) == 1
+
+
+def test_absorption_window_from_sweep_to_tap_in_minutes() -> None:
+    bar, mins = absorption_bar()  # sweep in minute 1, tap in minute 2
+    data = FULL_LONG[:15] + [bar]
+    late = StrategyConfig(entry_mode="absorption_1m", max_min_sweep_to_tap=0)
+    assert run_backtest(INST, data, {bar.ts: mins}, late).trades == []
+    ok = StrategyConfig(entry_mode="absorption_1m", max_min_sweep_to_tap=1)
+    (tr,) = run_backtest(INST, data, {bar.ts: mins}, ok).trades
+    assert tr.features["min_sweep_to_tap"] == 1
