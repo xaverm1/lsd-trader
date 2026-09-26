@@ -119,9 +119,10 @@ D=data/databento
 Stand 26.09. abends: Liquidität nur noch mit eigenem BOS (`bos_p`, Variante 2 verworfen: ein
 kleiner BOS in einer Range machte ältere Tiefs zur Liquidität) und Bein vom gebrochenen Level
 bis zum Tief ≥ 1 ATR (`liq_min_leg_atr`, aus 53 blinden Urteilen von Xaver, Spezifikation §6.7);
-das gebrochene Level ist nur ein normaler Swing (`liq_bos_pivot=1`, Xaver 26.09.).
+das gebrochene Level ist nur ein normaler Swing (`liq_bos_pivot=1`, Xaver 26.09.); Tap
+höchstens 180 min nach dem Sweep (`max_min_sweep_to_tap=180`, Xaver 26.09.).
 Ziel fest in R statt Leg-Level (Xaver). Offen: Abstandsgrenze Liquidität-Zone (Xavers blinde
-Urteile: etwa 2 ATR(14), `liq_max_dist_atr`, noch nicht gesetzt), Zeit Sweep→Tap, welches R,
+Urteile: etwa 2 ATR(14), `liq_max_dist_atr`, noch nicht gesetzt), welches R,
 „Session-Levels“ (Xaver nannte mehrfach Hochs/Tiefs um 15:30 Berlin am Vortag). Blinde
 Einordnung: `scripts/blind_liq_charts.py`, `scripts/blind_bos_charts.py`.
 

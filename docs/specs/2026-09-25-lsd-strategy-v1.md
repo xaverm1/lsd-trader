@@ -146,6 +146,7 @@ Multiple P′ per zone are allowed; whichever is swept first starts the setup. I
 
 - **Sweep:** a bar with `low < P′.low`.
 - **Tap:** a bar `t` with `sweepBar ≤ t ≤ sweepBar + maxBarsSweepToTap` (default **12** = one hour of 5-minute bars; amendment 2026-09-25, was 3 — Xaver: "after the sweep the zone can be taken for one hour") and `low ≤ Z.top + tapTolTicks × tick` (default tolerance **0**: touching the top edge is enough, stopping short is not). Sweep and tap may be the same bar.
+  **1-minute entry modes** (amendment 2026-09-26, `max_min_sweep_to_tap`, Xaver: **180** minutes): the tap minute is at most 180 minutes after the sweep minute. Reason: a later tap is a new move into the zone, not the reaction to the sweep (NQ 24.03.2025, tap 4 h 47 min after the sweep). Set by Xaver's judgement, not from results.
 - **Entry:** the first bar `e` with `tapBar ≤ e ≤ tapBar + maxBarsTapToEntry` (default 3) that satisfies the entry trigger while Z is intact. Fill at `close[e]`.
   - Setting `entryTrigger`: `bullish` (**default**: `close > open`), `aboveTapHigh` (bullish and `close > high[tapBar]`), `aboveLiq` (bullish and `close > P′.low`), `minBody` (bullish with body ≥ `minBodyTicks`).
   - Because a close inside the zone destroys it (§5.4), a valid entry bar always closes above `Z.top`.
