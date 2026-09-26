@@ -20,6 +20,8 @@ class Liquidity:
     idx: int  # bar of the swing low P′
     price: int
     bos_idx: int
+    h2: int | None = None  # the level its BOS broke
+    h2_idx: int | None = None
 
 
 class LiquidityBook:
@@ -32,8 +34,8 @@ class LiquidityBook:
         """Liquidity not yet swept (for inspection)."""
         return list(self._open)
 
-    def add(self, bos: Bos) -> Liquidity:
-        liq = Liquidity(self._next_id, bos.p_idx, bos.p_low, bos.bos_idx)
+    def add(self, bos: Bos, h2_idx: int | None = None) -> Liquidity:
+        liq = Liquidity(self._next_id, bos.p_idx, bos.p_low, bos.bos_idx, bos.h2, h2_idx)
         self._next_id += 1
         self._open.append(liq)
         return liq

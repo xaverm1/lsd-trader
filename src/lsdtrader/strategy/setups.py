@@ -293,6 +293,9 @@ class SetupTracker:
             "bars_sweep_to_tap": s.tap_idx - s.sweep_idx,
             "bars_tap_to_entry": i - s.tap_idx,
             "stop_ticks": risk,
+            "liq_bos_idx": s.liq.bos_idx,  # BOS of the liquidity and the level it broke
+            "liq_h2": s.liq.h2,  # side space: negated for shorts
+            "liq_h2_idx": s.liq.h2_idx,
         }
         if s.sweep_ts is not None and s.tap_ts is not None:
             features["min_sweep_to_tap"] = (s.tap_ts - s.sweep_ts).total_seconds() / 60

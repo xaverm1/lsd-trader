@@ -163,6 +163,9 @@ def test_absorption_entry_with_stop_at_the_deepest_wick() -> None:
     result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, cfg)
     (tr,) = [x for x in result.trades if x.side == "long"]
     assert (tr.entry_signal, tr.stop, tr.entry_ts) == (113, 107, mins[4].ts)
+    # liquidity P' 113 (bar 11) came from the BOS on bar 13 over H2 122 (bar 10)
+    f = tr.features
+    assert (f["liq_bos_idx"], f["liq_h2"], f["liq_h2_idx"]) == (13, 122, 10)
 
 
 def test_absorption_entry_with_stop_at_the_absorption_candle() -> None:

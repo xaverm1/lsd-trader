@@ -15,6 +15,7 @@ import base64
 import bisect
 import html
 import random
+from dataclasses import replace
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -72,7 +73,23 @@ for k, t in enumerate(picked, 1):
     trig = trig if long else (-trig if trig is not None else None)  # entry trigger in real prices
     wick = t.get("feat_abs_low")
     wick = wick if long else (-wick if wick is not None else None)
-    ctx = render(trade_spec(t, times, inst, bars), bars, inst, out_dir / f"{k:02d}_context.png")
+    spec = trade_spec(t, times, inst, bars)
+    h2, h2_idx, bos_idx = t.get("feat_liq_h2"), t.get("feat_liq_h2_idx"), t.get("feat_liq_bos_idx")
+    if h2 is not None and h2_idx is not None and bos_idx is not None:
+        # the level the liquidity's BOS broke, and the BOS bar (its close beyond H2)
+        spec = replace(
+            spec,
+            first=min(spec.first, h2_idx - 3),
+            levels=[
+                *spec.levels,
+                Level(h2_idx, bos_idx, h2 if long else -h2, "#888780", "BOS level H2", "--"),
+            ],
+            markers=[
+                *spec.markers,
+                Marker(bos_idx, bars[bos_idx].close, "BOS of the liquidity", "#888780", "o"),
+            ],
+        )
+    ctx = render(spec, bars, inst, out_dir / f"{k:02d}_context.png")
     e, x = midx(t["entry_ts"]), midx(t["exit_ts"])
     first = (midx(abs_ts) if abs_ts else e) - 40
     last = min(e + 40, x + 5) if x > e else e + 40
