@@ -2,7 +2,7 @@
 """Charts of absorption trades to compare with TradingView: strategy-bar context + 1-minute detail.
 
 Usage: python scripts/trade_charts.py RUN_FOLDER [--latest K] [--random N] [--seed S]
-       [--since YYYY-MM-DD]
+       [--since YYYY-MM-DD] [--also "2026-07-20 13:46" ...]
 
 Writes RUN_FOLDER/trade_charts.html with a table (Berlin times, prices) and, per trade, the
 context chart (zone, P', sweep, tap, entry, exit on the strategy bars) and the 1-minute detail
@@ -39,6 +39,9 @@ ap.add_argument("--latest", type=int, default=10)
 ap.add_argument("--random", type=int, default=10)
 ap.add_argument("--seed", type=int, default=1)
 ap.add_argument("--since", help="only trades entered on or after this date (YYYY-MM-DD)")
+ap.add_argument(
+    "--also", nargs="*", default=[], help="also show trades whose UTC entry time starts with this"
+)
 args = ap.parse_args()
 
 run = load_run(args.run)
@@ -53,10 +56,13 @@ for t in sorted(run.trades, key=lambda t: t["entry_ts"]):
             trades.append(t)
 latest = trades[-args.latest :] if args.latest else []
 older = trades[: len(trades) - len(latest)]
-picked = sorted(
-    random.Random(args.seed).sample(older, min(args.random, len(older))) + latest,
-    key=lambda t: t["entry_ts"],
-)
+chosen = random.Random(args.seed).sample(older, min(args.random, len(older))) + latest
+chosen += [
+    t
+    for t in trades
+    if t not in chosen and any(str(t["entry_ts"]).startswith(a) for a in args.also)
+]
+picked = sorted(chosen, key=lambda t: t["entry_ts"])
 out_dir = args.run / "trade_charts"
 
 
