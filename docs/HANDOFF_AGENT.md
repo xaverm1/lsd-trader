@@ -160,6 +160,26 @@ behalten nur einen Trade pro Minute und Seite (live wäre das eine Position).
 | Variante 2 + Leg-Ziel + `--flat-only`, NQ 2026 | Ziel -2: 197 Trades, netto +0,06 R; -2,5: +0,13; -4: +0,13 (t ≤ 0,6); keine Übernacht-Trades |
 | Fenster Sweep→Tap, NQ 2026, pivot 2 (alte Liquiditäts- und Zielregel) | 15 min +0,57 R (75 T), 60 min +0,39 (114), 2 h +0,34 (139), 4 h +0,17 (158), 24 h +0,13 (194). Median Sweep→Tap 43 min. Tap > 1 h nach dem Sweep: negativ. |
 
+**Einstieg Reclaim statt Bubble, New-York-Fenster (26.09. nachts, nach beiden Fixes):** neuer
+`entry_mode=reclaim_liq_1m` (erste Minute nach dem Tap, die über der gesweepten Liquidität
+schließt, Stop tiefster Docht) und CLI `--entries-ny-from HH:MM` (Einstiege ab dieser NY-Zeit
+bis zum Flat 15:10 CT). Aktueller Befehl oben, 4R netto R/Trade (N):
+
+| Einstieg | Fenster | 2025 (out-of-sample) | 2026 (in-sample) |
+|---|---|---|---|
+| Bubble | ganzer Tag | -0,09 (191) | +0,14 (161) |
+| Bubble | ab 08:30 NY | -0,19 (137) | +0,44 (108, t 2,2) |
+| Bubble | ab 09:30 NY | -0,14 (124) | +0,30 (91) |
+| Reclaim | ganzer Tag | +0,01 (184) | -0,11 (133) |
+| Reclaim | ab 08:30 NY | +0,06 (134) | +0,13 (93) |
+| Reclaim | ab 09:30 NY | +0,08 (123) | +0,10 (81) |
+
+Die Bubble ist nur im Jahr gut, aus dem die Regeln stammen, 2025 negativ: Anpassung an 2026.
+Reclaim ist in beiden Jahren nahe null, einfacher und out-of-sample nicht schlechter. Das
+NY-Fenster hilft nicht eindeutig. Xaver will die Bubble ersetzen (Begründung: in NY hat der
+Preis ohnehin Kraft; Messung: 20-28 % aller NY-Minuten bekommen eine Bubble). Startzeit 08:30
+oder 09:30 NY offen.
+
 **Fixes 26.09.2026 (verändern alle früheren Zahlen):**
 - Rollwechsel: Die Databento-Reihe sprang bei jedem Kontraktwechsel (NQ 210-320 Punkte, ~7-10
   Stops); Zonen und Liquidität von vor dem Roll lagen falsch, ein Trade über den Roll kostete
