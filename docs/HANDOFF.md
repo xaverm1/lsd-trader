@@ -257,6 +257,16 @@ level lies beyond P' in only 34 % of trades (the bearish run into the low is oft
 or two candles), so the P' reclaim is usually the binding condition. Charts checked: entries
 follow the rule.
 
+### Targets from the leg into the zone ("SD projections", 2026-09-26)
+
+`scripts/sd_targets.py RUN [PIVOT]`: leg = last confirmed 1-minute swing high (5 bars each
+side, fixed before looking) before the stop low; target -k = leg high + k x leg. On the SPX
+30m sweep_1m_cisd run (750 trades, gross): median target -2 = 3.2 R, -4 = 6.1 R. SD -2
++0.084 R/T, -2.5 +0.053, -4 +0.094 vs fixed 4R +0.043, 6R +0.106 - no better than fixed R.
+50 % at -2 / 50 % at -4 with stop to break-even after the first partial: +0.144 (t 1.6), but
+the same plan with fixed 2R/6R gives +0.122 (t 1.8): the gain is the break-even management,
+not the SD targets. Same picture with pivot 3 and 10. None significant.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
