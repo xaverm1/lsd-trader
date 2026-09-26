@@ -317,6 +317,18 @@ Conclusion: the absorption entry as coded has no edge on ES or NQ 2010-2026 befo
 costs. Open question for Xaver: which part of the live entry differs from this rule (compare
 the latest trades in the chart files with TradingView).
 
+Rule fixes after Xaver's review of the charts (2026-09-26): about 30 % of the trades used
+liquidity more than 3 zone heights away, and about 20 % entered after a wick through the whole
+zone (the zone was only checked on the 30m close). New options, Xaver's rules:
+`--set liq_rule=nearest` (only the open swing low closest to the zone counts; another one
+formed after the zone origin in between makes it too far) and `--set zone_kill=wick_beyond`
+(the zone dies on any trade below it, a close below included, checked every minute). NQ
+2025-2026 test run with both: 2026 has 273 trades, liquidity median 0.7 zone heights away,
+no entry after a wick through; gross +0.006, net -0.023 R per trade (one year, not a
+result). Working rule from Xaver: after every rule change first a test run on the current
+year (ES or NQ) with `scripts/trade_charts.py RUN --since 2026-01-01`, he checks the trades
+in TradingView, only then the full 2010-2026 run.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing

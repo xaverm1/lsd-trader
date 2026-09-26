@@ -2,6 +2,7 @@
 """Charts of absorption trades to compare with TradingView: strategy-bar context + 1-minute detail.
 
 Usage: python scripts/trade_charts.py RUN_FOLDER [--latest K] [--random N] [--seed S]
+       [--since YYYY-MM-DD]
 
 Writes RUN_FOLDER/trade_charts.html with a table (Berlin times, prices) and, per trade, the
 context chart (zone, P', sweep, tap, entry, exit on the strategy bars) and the 1-minute detail
@@ -36,6 +37,7 @@ ap.add_argument("run", type=Path)
 ap.add_argument("--latest", type=int, default=10)
 ap.add_argument("--random", type=int, default=10)
 ap.add_argument("--seed", type=int, default=1)
+ap.add_argument("--since", help="only trades entered on or after this date (YYYY-MM-DD)")
 args = ap.parse_args()
 
 run = load_run(args.run)
@@ -46,7 +48,8 @@ trades, seen = [], set()
 for t in sorted(run.trades, key=lambda t: t["entry_ts"]):
     if (t["entry_ts"], t["side"]) not in seen:  # several zones can fire the same entry minute
         seen.add((t["entry_ts"], t["side"]))
-        trades.append(t)
+        if args.since is None or t["entry_ts"].date().isoformat() >= args.since:
+            trades.append(t)
 latest = trades[-args.latest :] if args.latest else []
 older = trades[: len(trades) - len(latest)]
 picked = sorted(
