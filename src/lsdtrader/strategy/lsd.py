@@ -185,6 +185,11 @@ class SideEngine:
             for j in range(1, n + 1)
         ):
             self._highs.append((c, self.bars[c].high))
+        age = self.cfg.liq_max_high_age_days
+        if age is not None:  # too old to be broken any more
+            self._highs = [
+                h for h in self._highs if trading_days_between(self.bars[h[0]].ts, bar.ts) <= age
+            ]
         broken = [h for h in self._highs if bar.close > h[1]]
         self._highs = [h for h in self._highs if bar.close <= h[1]]
         for h_idx, h_price in broken:

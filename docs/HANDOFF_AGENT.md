@@ -112,7 +112,7 @@ D=data/databento
 .venv/bin/lsd backtest $D/NQ_ohlcv1m_2025.csv.gz $D/NQ_ohlcv1m_2026.csv.gz \
   --timeframe 30 --flat-only \
   --set entry_mode=absorption_1m --set liq_rule=nearest --set zone_kill=close_inside \
-  --set liq_source=swing_break --set liq_min_leg_atr=1.0 \
+  --set liq_source=swing_break --set liq_min_leg_atr=1.0 --set liq_max_high_age_days=1 \
   --set max_min_sweep_to_tap=180 --set zone_max_age_days=5 --set tp_mode=rr --set rr=4
 ```
 
@@ -130,7 +130,9 @@ Einordnung: `scripts/blind_liq_charts.py`, `scripts/blind_bos_charts.py`.
 Neu (26.09. spät): Liquidität per `liq_source=swing_break` (Spezifikation §6.8): jeder Close über
 einem Swing-Hoch ist ein Bruch; Liquidität für eine Zone ist das tiefste Swing-Tief über der Zone
 nach dem Zonenursprung zwischen Hoch und Bruchkerze. Abgeleitet aus Xavers Markierungen mit
-`scripts/liq_annotator.py` (Batch 1: 18/19 getroffen, angepasst); Batch 2 (frisch) ist die Prüfung.
+`scripts/liq_annotator.py` (Batch 1: 18/19 getroffen, angepasst); Batch 2 (frisch): 11-12 von 15 markierten Liquiditäten getroffen, bei 5 "keine Liquidität"
+handelt der Code (6, 17, 20 akzeptiert Xaver als Bot-Setups; 11 = Abstand). Gebrochenes Hoch
+höchstens 1 Handelstag alt (`liq_max_high_age_days=1`, §6.9).
 
 Ausgabe: `runs/<Zeit>_<Symbol>_<hash>/` (trades.parquet, meta.json). Auswertung:
 

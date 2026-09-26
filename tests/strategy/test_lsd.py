@@ -153,3 +153,31 @@ def test_swing_break_makes_the_lows_before_the_break_liquidity() -> None:
     assert (book[4].h2, book[4].h2_idx, book[4].bos_idx) == (120, 2, 10)
     assert (book[8].h2, book[8].h2_idx, book[8].bos_idx) == (112, 6, 9)
     assert len(book[8].groups) == 2
+
+
+def test_swing_break_needs_a_recent_swing_high() -> None:
+    # The bars of the test above, with the breaking bars a week later: the broken swing
+    # highs are then 5 trading days old.
+    from dataclasses import replace
+    from datetime import timedelta
+
+    base = make_bars(
+        (100, 101, 99, 100),
+        (100, 110, 100, 109),
+        (109, 120, 108, 112),
+        (112, 113, 105, 106),
+        (106, 107, 102, 103),
+        (104, 111, 104, 110),
+        (110, 112, 107, 108),
+        (108, 109, 106, 107),
+        (107, 110, 105, 109),
+        (109, 121, 108, 120),
+        (120, 123, 119, 122),
+        (122, 125, 121, 124),
+    )
+    bars = base[:9] + [replace(b, ts=b.ts + timedelta(days=7)) for b in base[9:]]
+    for k, expected in ((5, [4, 8]), (4, [])):
+        strat = LsdStrategy(StrategyConfig(liq_source="swing_break", liq_max_high_age_days=k))
+        for b in bars:
+            strat.long.on_bar(b)
+        assert sorted(x.idx for x in strat.long.liquidity.open) == expected

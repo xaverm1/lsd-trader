@@ -38,6 +38,9 @@ class StrategyConfig:
     # liquidity is the lowest unswept swing low after that high (up to the break bar) above the
     # zone and after its origin, with a leg high - low of at least liq_min_leg_atr ATR
     liq_source: Literal["bos_p", "all_before_bos", "swing_break"] = "bos_p"
+    # swing_break: a close above a swing high more than this many trading days old (Mon-Fri,
+    # sessions from 17:00 CT) is no break; None: any age
+    liq_max_high_age_days: int | None = None
     atr_len: int = 14
     max_bars_sweep_to_tap: int = 12  # one hour of 5-minute bars (Spec §7)
     # 1-minute entry modes: the tap must come at most this many minutes after the sweep minute
@@ -83,6 +86,8 @@ class StrategyConfig:
             raise ValueError("zone_lookback must be >= 1")
         if self.atr_len < 1:
             raise ValueError("atr_len must be >= 1")
+        if self.liq_max_high_age_days is not None and self.liq_max_high_age_days < 0:
+            raise ValueError("liq_max_high_age_days must be >= 0 or None")
         if self.zone_max_age_days is not None and self.zone_max_age_days < 0:
             raise ValueError("zone_max_age_days must be >= 0 or None")
         if self.liq_min_leg_atr is not None and self.liq_min_leg_atr <= 0:
