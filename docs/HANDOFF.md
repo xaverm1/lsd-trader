@@ -274,6 +274,23 @@ fixed 6R +0.125. Break-even at -1 does not help (it turns winners into scratches
 often as it saves losers). The earlier +0.144 for "50/50 with BE" came from the MFE shortcut
 and was too optimistic; the exact replay gives +0.095. Nothing significant.
 
+### Next: Databento futures data with volume (2026-09-26)
+
+Xaver now trades 30m zones with a 1-minute entry tied to the absorption-bubble indicator
+(TradingView, volume / stdev(volume, 100) plus wick rule, volume taken from the mini). HistData
+has no volume, so this entry cannot be tested yet. Plan for the next session:
+1. `DATABENTO_API_KEY` is set as an environment variable (never paste it into chat). Check
+   `echo ${DATABENTO_API_KEY:+yes}`; hist.databento.com is reachable (401 without key).
+2. Dataset GLBX.MDP3, schema ohlcv-1m, continuous volume-roll symbols ES.v.0 and NQ.v.0
+   (stype_in=continuous). Ask `metadata.get_cost` first and stay inside the $125 sign-up
+   credits (expire 6 months after sign-up). As far back as the credits allow.
+3. Store per year, compressed, in lsd-trader-data (e.g. `databento/ES_ohlcv1m_2019.csv.zst`),
+   update its README. Never into the public repo.
+4. Add a loader for the Databento CSV (UTC timestamps, prices in fixed-point 1e-9 unless
+   pretty_px), then rebuild the bubble logic and test the entry "close above the absorption
+   candle" with stop at its low, targets fixed R and leg levels (-2/-4), with and without
+   break-even.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
