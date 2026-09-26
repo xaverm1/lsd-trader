@@ -29,6 +29,18 @@ class _Candidate:
     h2: int
 
 
+def strong_level(bars: Sequence[TickBar], bos: Bos, n: int) -> bool:
+    """True if the level the BOS broke (H2) is a swing high with `n` bars on each side, the
+    right side before the BOS bar (left may be equal, right strictly lower, as swing lows)."""
+    c = max(
+        (j for j in range(bos.l0_idx + 1, bos.p_idx + 1) if bars[j].high == bos.h2),
+        default=None,
+    )
+    if c is None or c - n < 0 or c + n >= bos.bos_idx:
+        return False
+    return all(bars[c - k].high <= bos.h2 and bars[c + k].high < bos.h2 for k in range(1, n + 1))
+
+
 class StructureTracker:
     def __init__(self, cfg: StrategyConfig, log: EventLog) -> None:
         self._cfg = cfg

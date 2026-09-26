@@ -16,13 +16,16 @@ class StrategyConfig:
     zone_mode: Literal["auto", "normal"] = "auto"
     extra_zones: Literal["none", "last", "all"] = "none"
     # close_inside: a close inside the zone or a wick below it; close_beyond: a close below it;
-    # wick_beyond: any trade below the zone (a close below included), checked every minute in
-    # the 1-minute entry modes
+    # wick_beyond: any trade below the zone (a close below included). In the 1-minute entry
+    # modes the wick part (close_inside, wick_beyond) is checked on every minute.
     zone_kill: Literal["close_inside", "close_beyond", "wick_beyond"] = "close_inside"
     liq_max_dist_atr: float | None = None
     # any: every unswept swing low above a left zone is liquidity for it; nearest: only the one
     # closest to the zone (no other open swing low formed after the zone origin in between)
     liq_rule: Literal["any", "nearest"] = "any"
+    # > 0: a swing low is liquidity only if the level its BOS broke (H2) is itself a swing high
+    # with this many bars on each side (the right side before the BOS bar)
+    liq_bos_pivot: int = 0
     atr_len: int = 14
     max_bars_sweep_to_tap: int = 12  # one hour of 5-minute bars (Spec §7)
     tap_tol_ticks: int = 0
@@ -66,6 +69,7 @@ class StrategyConfig:
             "tap_tol_ticks",
             "max_bars_tap_to_entry",
             "sl_buffer_ticks",
+            "liq_bos_pivot",
         ):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must be >= 0")

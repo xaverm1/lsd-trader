@@ -190,6 +190,8 @@ def test_absorption_zone_dies_on_a_minute_wick_below_it() -> None:
     kill = StrategyConfig(entry_mode="absorption_1m", zone_kill="wick_beyond")
     result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, kill)
     assert [x for x in result.trades if x.side == "long"] == []
+    default = StrategyConfig(entry_mode="absorption_1m")  # close_inside kills wicks too
+    assert run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, default).trades == []
     keep = StrategyConfig(entry_mode="absorption_1m", zone_kill="close_beyond")
     result = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, keep)
     assert len([x for x in result.trades if x.side == "long"]) == 1

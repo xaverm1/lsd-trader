@@ -90,3 +90,25 @@ def test_same_bar_undercut_and_close_above_h2_is_no_bos() -> None:
     found, log = run(bars)
     assert all(b.p_idx != 6 for b in found)
     assert any(e.kind == "cand_undercut" and e.detail["p_idx"] == 6 for e in log.events)
+
+
+def test_strong_level_needs_a_swing_high_before_the_bos() -> None:
+    from lsdtrader.strategy.structure import strong_level
+
+    bars = make_bars(
+        (100, 101, 95, 96),  # 0 L0
+        (96, 104, 96, 103),  # 1
+        (103, 106, 102, 105),  # 2
+        (105, 110, 104, 106),  # 3 H2 = 110
+        (106, 107, 101, 102),  # 4
+        (102, 103, 98, 99),  # 5 P
+        (99, 104, 99, 103),  # 6
+        (103, 112, 103, 111),  # 7 BOS
+    )
+    bos = Bos(p_idx=5, p_low=98, l0_idx=0, h2=110, bos_idx=7, known_idx=7)
+    assert strong_level(bars, bos, 3)  # 3 lower highs on each side, all before the BOS bar
+    assert not strong_level(bars, bos, 4)  # not enough bars on the left
+    lifted = [*bars[:5], make_bars((102, 110, 98, 99))[0], *bars[6:]]
+    assert not strong_level(lifted, bos, 2)  # an equal high on the right: no swing
+    early = Bos(p_idx=5, p_low=98, l0_idx=0, h2=110, bos_idx=5, known_idx=5)
+    assert not strong_level(bars, early, 2)  # right side must lie before the BOS bar

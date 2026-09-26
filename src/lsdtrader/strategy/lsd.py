@@ -16,7 +16,7 @@ from lsdtrader.strategy.atr import Atr
 from lsdtrader.strategy.context import LevelBook, TrendTracker, hh_hl
 from lsdtrader.strategy.liquidity import LiquidityBook, match_zones
 from lsdtrader.strategy.setups import Entry, SetupTracker
-from lsdtrader.strategy.structure import StructureTracker
+from lsdtrader.strategy.structure import StructureTracker, strong_level
 from lsdtrader.strategy.swings import confirmed_swing_low
 from lsdtrader.strategy.zones import ZoneBook
 
@@ -105,7 +105,11 @@ class SideEngine:
         for bos in self.structure.update(self.bars, swing):
             self.log.emit("bos", p_idx=bos.p_idx, bos_idx=bos.bos_idx, h2=bos.h2)
             self.zones.create(self.bars, bos)
-            self.liquidity.add(bos)
+            n = self.cfg.liq_bos_pivot
+            if n == 0 or strong_level(self.bars, bos, n):
+                self.liquidity.add(bos)
+            else:
+                self.log.emit("liq_weak_bos", p_idx=bos.p_idx)
         before = self.liquidity.open
         for liq in [] if by_minute else self.liquidity.swept_by(bar):
             zones, reason = match_zones(liq, self.zones.live(), atr, self.cfg, before)

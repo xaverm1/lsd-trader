@@ -102,8 +102,9 @@ class ZoneBook:
                 self._mark_end(z, k)
 
     def kill_by_minute(self, zone: Zone, minute: TickBar) -> None:
-        """zone_kill=wick_beyond inside a strategy bar: a minute trading below the zone."""
-        if self._cfg.zone_kill == "wick_beyond" and zone.live and minute.low < zone.bot:
+        """Wick kill inside a strategy bar (close_inside, wick_beyond): a minute below the zone."""
+        kills = self._cfg.zone_kill in ("close_inside", "wick_beyond")
+        if kills and zone.live and minute.low < zone.bot:
             self._destroy(zone, "wick")
             self._mark_end(zone, self._current + 1)
 
