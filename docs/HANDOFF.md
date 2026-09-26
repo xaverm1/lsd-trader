@@ -267,6 +267,13 @@ side, fixed before looking) before the stop low; target -k = leg high + k x leg.
 the same plan with fixed 2R/6R gives +0.122 (t 1.8): the gain is the break-even management,
 not the SD targets. Same picture with pivot 3 and 10. None significant.
 
+Break-even / TP at level -1, replayed minute by minute (`scripts/sd_be.py`, 728 SPX trades,
+gross, same-minute = stop): TP -2 +0.088, with BE after -1 +0.085; TP -4 +0.106 vs +0.098;
+TP at -1 +0.056; 50 % -1 / 50 % -2 with BE +0.070; 50 % -2 / 50 % -4 with BE after -2 +0.095;
+fixed 6R +0.125. Break-even at -1 does not help (it turns winners into scratches about as
+often as it saves losers). The earlier +0.144 for "50/50 with BE" came from the MFE shortcut
+and was too optimistic; the exact replay gives +0.095. Nothing significant.
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
