@@ -138,6 +138,7 @@ A swing low P′ is valid liquidity for zone Z if **all** hold, evaluated at the
 4. P′ has not been swept before.
 5. Z has been left and is not destroyed.
 6. Optional research filter `liqMaxDistATR` (default **off**): `P′.low − Z.top ≤ liqMaxDistATR × ATR(14)` on the sweep bar.
+7. **Leg size** (amendment 2026-09-26, `liq_min_leg_atr`, Xaver's value **1.0**, default off): the move from the level P′'s own BOS broke down to P′ is at least `liq_min_leg_atr × ATR(14)`, ATR after the BOS bar: `H2 − P′.low ≥ k × ATR`. Reason: a BOS inside a range (a small high broken, the range high not) makes no liquidity. Decided on 53 blind judgements of NQ 2025/26 liquidity (no results shown): leg ≥ 1 ATR matched 37 of 46 clear judgements; a 3-bar H2 pivot (27/46) and a close above the 6 h high (26/46) did not beat "everything is liquidity" (26/46). With it, Xaver's rule "each low needs its own starting high broken" means `liq_source=bos_p` (not `all_before_bos`), with `liq_bos_pivot=2`.
 
 Multiple P′ per zone are allowed; whichever is swept first starts the setup. If a sweep matches no zone, exactly one reason is counted: the furthest stage reached (`no_zone_below` < `zone_not_left` < `liq_before_zone` < `too_far`).
 

@@ -26,6 +26,9 @@ class StrategyConfig:
     # > 0: a swing low is liquidity only if the level its BOS broke (H2) is itself a swing high
     # with this many bars on each side (the right side before the BOS bar)
     liq_bos_pivot: int = 0
+    # a swing low is liquidity only if the move from the level its BOS broke (H2) down to it is
+    # at least this many ATR (ATR after the BOS bar); None: no minimum
+    liq_min_leg_atr: float | None = None
     # bos_p: a (strong) BOS makes its swing low P liquidity; all_before_bos: it makes every
     # swing low that formed before it and is not swept yet liquidity (P, L0 and older ones)
     liq_source: Literal["bos_p", "all_before_bos"] = "bos_p"
@@ -74,6 +77,8 @@ class StrategyConfig:
             raise ValueError("zone_lookback must be >= 1")
         if self.atr_len < 1:
             raise ValueError("atr_len must be >= 1")
+        if self.liq_min_leg_atr is not None and self.liq_min_leg_atr <= 0:
+            raise ValueError("liq_min_leg_atr must be > 0 or None")
         if self.liq_max_dist_atr is not None and self.liq_max_dist_atr <= 0:
             raise ValueError("liq_max_dist_atr must be > 0 or None")
         for name in (

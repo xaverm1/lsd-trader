@@ -269,3 +269,22 @@ def test_minute_entry_on_the_first_minute_of_a_bar_is_managed_in_that_bar(monkey
     result = run_backtest(INST, bars, {bars[0].ts: mins})
     (tr,) = result.trades
     assert (tr.exit_reason, tr.exit_raw, tr.exit_ts) == ("sl", 108, mins[1].ts)
+
+
+def test_liquidity_needs_a_leg_of_at_least_k_atr() -> None:
+    # FULL_LONG: liquidity P' 113 (bar 11), made liquidity by the BOS on bar 13 over its own
+    # H2 122. The leg H2 - P' = 9 ticks must be at least liq_min_leg_atr x ATR (after the BOS
+    # bar); otherwise P' is no liquidity and there is no trade.
+    from lsdtrader.strategy.atr import Atr
+
+    a = Atr(StrategyConfig().atr_len)
+    atr13 = [a.update(b) for b in FULL_LONG[:14]][13]
+    assert atr13 is not None
+    exact = 9 / atr13
+    ok = run_backtest(INST, FULL_LONG + TO_TARGET, cfg=StrategyConfig(liq_min_leg_atr=exact))
+    assert [t.exit_reason for t in ok.trades if t.side == "long"] == ["tp"]
+    small = run_backtest(
+        INST, FULL_LONG + TO_TARGET, cfg=StrategyConfig(liq_min_leg_atr=exact * 1.01)
+    )
+    assert [t for t in small.trades if t.side == "long"] == []
+    assert any(e.kind == "liq_small_leg" and e.side == "long" for e in small.events)

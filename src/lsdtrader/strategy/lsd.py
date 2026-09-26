@@ -81,6 +81,7 @@ class SideEngine:
         self.levels = {n: LevelBook(n) for n in LEVEL_PIVOTS}
         self._trend_state: dict[int, int] = {n: 0 for n in TREND_PIVOTS}
         self._last_atr: float | None = None
+        self._atrs: list[float | None] = []  # ATR after each bar
         self._run_open: int | None = None  # open of the latest run of bearish minutes
         self._bearish_run = False
         self._swings: list[tuple[int, int]] = []  # swing lows waiting for a BOS (all_before_bos)
@@ -105,6 +106,7 @@ class SideEngine:
         self.log.bar_index = i
         atr = self._atr.update(bar)
         self._last_atr = atr
+        self._atrs.append(atr)
         self.zones.update(self.bars)
         swing = confirmed_swing_low(self.bars, self.cfg.piv_len)
         # swing lows traded below before any BOS validated them never become liquidity
@@ -117,6 +119,11 @@ class SideEngine:
             n = self.cfg.liq_bos_pivot
             if n > 0 and not strong_level(self.bars, bos, n):
                 self.log.emit("liq_weak_bos", p_idx=bos.p_idx)
+                continue
+            k = self.cfg.liq_min_leg_atr
+            leg_atr = self._atrs[bos.bos_idx]
+            if k is not None and (leg_atr is None or bos.h2 - bos.p_low < k * leg_atr):
+                self.log.emit("liq_small_leg", p_idx=bos.p_idx)
                 continue
             h2_idx = h2_index(self.bars, bos)
             if self.cfg.liq_source == "bos_p":

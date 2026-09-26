@@ -112,8 +112,16 @@ D=data/databento
 .venv/bin/lsd backtest $D/NQ_ohlcv1m_2025.csv.gz $D/NQ_ohlcv1m_2026.csv.gz \
   --timeframe 30 --flat-only \
   --set entry_mode=absorption_1m --set liq_rule=nearest --set zone_kill=close_inside \
-  --set liq_bos_pivot=2 --set liq_source=all_before_bos --set tp_mode=leg --set tp_leg=2
+  --set liq_bos_pivot=2 --set liq_source=bos_p --set liq_min_leg_atr=1.0   --set tp_mode=rr --set rr=4
 ```
+
+Stand 26.09. abends: Liquidität nur noch mit eigenem BOS (`bos_p`, Variante 2 verworfen: ein
+kleiner BOS in einer Range machte ältere Tiefs zur Liquidität) und Bein vom gebrochenen Level
+bis zum Tief ≥ 1 ATR (`liq_min_leg_atr`, aus 53 blinden Urteilen von Xaver, Spezifikation §6.7).
+Ziel fest in R statt Leg-Level (Xaver). Offen: Abstandsgrenze Liquidität-Zone (Xavers blinde
+Urteile: etwa 2 ATR(14), `liq_max_dist_atr`, noch nicht gesetzt), Zeit Sweep→Tap, welches R,
+„Session-Levels“ (Xaver nannte mehrfach Hochs/Tiefs um 15:30 Berlin am Vortag). Blinde
+Einordnung: `scripts/blind_liq_charts.py`, `scripts/blind_bos_charts.py`.
 
 Ausgabe: `runs/<Zeit>_<Symbol>_<hash>/` (trades.parquet, meta.json). Auswertung:
 

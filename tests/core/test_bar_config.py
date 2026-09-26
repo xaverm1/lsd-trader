@@ -40,6 +40,7 @@ def test_config_defaults_match_spec() -> None:
         {"tap_tol_ticks": -1},
         {"bos_max_bars": 0},
         {"liq_max_dist_atr": 0},
+        {"liq_min_leg_atr": 0},
         {"max_trades_per_zone": 0},
     ],
 )
