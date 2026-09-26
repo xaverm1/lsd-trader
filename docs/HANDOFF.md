@@ -329,6 +329,15 @@ result). Working rule from Xaver: after every rule change first a test run on th
 year (ES or NQ) with `scripts/trade_charts.py RUN --since 2026-01-01`, he checks the trades
 in TradingView, only then the full 2010-2026 run.
 
+Second review round (Xaver, 2026-09-26): liquidity must itself cause a strong BOS, judged by
+the broken level: `--set liq_bos_pivot=N` (the level H2 the BOS broke must be a swing high with
+N bars on each side before the BOS bar; zones are not filtered). A 30m close inside the zone
+kills the setup (`zone_kill=close_inside`, the default; its wick part is now checked every
+minute too). NQ 2026 test runs with `liq_rule=nearest`: N=2 174 trades (gross +0.149, net
++0.122 R/T), N=3 144 trades (+0.042 / +0.014); one year, for checking the charts only.
+Next idea from Xaver: vary the time allowed from the sweep to the entry (now 12 strategy bars
+sweep to tap, 3 bars tap to entry, 15 minutes absorption to entry).
+
 ## Working rules
 
 - Each rule change: spec amendment in `docs/specs/2026-09-25-lsd-strategy-v1.md`, failing
