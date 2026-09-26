@@ -5,7 +5,9 @@ Usage: python scripts/absorption_report.py RUN_FOLDER [RUN_FOLDER ...]
 
 Gross R from the run (a target of X R is evaluated exactly from the run-up without take
 profit); net R = gross minus the run's own cost per trade (commission + 1 tick slippage per
-side from the instrument spec, in R of that trade).
+side from the instrument spec, in R of that trade). Several zones can share one sweep and
+fire the same entry minute; only the first trade per entry minute and side is kept (one
+position live).
 """
 
 import json
@@ -36,9 +38,15 @@ for run in sys.argv[1:]:
     with open(f"{run}/meta.json") as fh:
         meta = json.load(fh)
     tick = float(meta["instrument"]["tick_size"])
-    ts = [
+    raw = [
         t for t in pq.read_table(f"{run}/trades.parquet").to_pylist() if t["mfe_free_r"] is not None
     ]
+    seen: set = set()
+    ts = []
+    for t in raw:
+        if (t["entry_ts"], t["side"]) not in seen:
+            seen.add((t["entry_ts"], t["side"]))
+            ts.append(t)
     years = sorted({t["entry_ts"].year for t in ts})
     stops = [t["risk_ticks"] * tick for t in ts]
     cost = [t["cost_r"] for t in ts]
@@ -46,7 +54,7 @@ for run in sys.argv[1:]:
         f"\n## {meta['instrument']['root']} {years[0]}-{years[-1]}, stop_ref={meta['strategy_config'].get('stop_ref')}"
     )
     print(
-        f"{len(ts)} trades ({len(ts) / len(years):.0f}/yr), median stop {statistics.median(stops):.2f} pts, "
+        f"{len(ts)} trades ({len(raw) - len(ts)} same-minute duplicates dropped, {len(ts) / len(years):.0f}/yr), median stop {statistics.median(stops):.2f} pts, "
         f"median cost {statistics.median(cost):.2f} R, mean cost {sum(cost) / len(cost):.2f} R\n"
     )
     print("| TP | gross R/T (t) | net R/T (t) | win % |")

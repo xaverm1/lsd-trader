@@ -42,7 +42,11 @@ run = load_run(args.run)
 inst, bars, minutes = run.data.instrument, run.data.bars, run.data.minute_bars
 times, mtimes = run.times, [m.ts for m in minutes]
 px = inst.to_price
-trades = sorted(run.trades, key=lambda t: t["entry_ts"])
+trades, seen = [], set()
+for t in sorted(run.trades, key=lambda t: t["entry_ts"]):
+    if (t["entry_ts"], t["side"]) not in seen:  # several zones can fire the same entry minute
+        seen.add((t["entry_ts"], t["side"]))
+        trades.append(t)
 latest = trades[-args.latest :] if args.latest else []
 older = trades[: len(trades) - len(latest)]
 picked = sorted(
