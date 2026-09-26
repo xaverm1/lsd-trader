@@ -93,3 +93,15 @@ def test_backtest_timeframe_and_hold_overnight(
         False,
         None,
     )
+
+
+def test_backtest_flat_only_keeps_the_flat_and_opens_entries_until_it(tmp_path: Path) -> None:
+    z = histdata_zip(tmp_path / "a.zip", 120)
+    assert (
+        main(["backtest", str(z), "--timeframe", "30", "--flat-only", "--out", str(tmp_path / "r")])
+        == 0
+    )
+    (meta,) = (tmp_path / "r").glob("*/meta.json")
+    cfg = json.loads(meta.read_text())["execution_config"]
+    assert cfg["flat_before_break"] is True
+    assert [str(x)[:5] for x in cfg["session_window"]] == ["17:00", "15:10"]

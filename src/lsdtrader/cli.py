@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from pathlib import Path
 
 from lsdtrader.backtest.runner import run_backtest
@@ -58,6 +58,11 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     exec_cfg = ExecutionConfig(sizing=args.sizing, risk_usd=args.risk, bar_minutes=args.timeframe)
     if args.hold_overnight:
         exec_cfg = dataclasses.replace(exec_cfg, flat_before_break=False, session_window=None)
+    elif args.flat_only:
+        # entries all session long; only from the flat time to the reopen none (they would run
+        # overnight until the next day's flat)
+        window = (exec_cfg.session_window or (time(17, 0), time(14, 0)))[0], exec_cfg.flat_time
+        exec_cfg = dataclasses.replace(exec_cfg, session_window=window)
     data = load_data(args.files, args.instrument, args.timeframe)
     result = run_backtest(data.instrument, data.bars, data.minutes, cfg, exec_cfg)
     notes = {
@@ -145,6 +150,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--hold-overnight",
         action="store_true",
         help="no forced close at the flat time and no entry window (positions run on)",
+    )
+    bt.add_argument(
+        "--flat-only",
+        action="store_true",
+        help="prop-firm flat at 15:10 CT, but no 14:00 entry stop: entries from the 17:00 "
+        "reopen up to the flat time",
     )
     bt.set_defaults(func=cmd_backtest)
 

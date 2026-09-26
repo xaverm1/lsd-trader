@@ -97,6 +97,12 @@ for k, t in enumerate(picked, 1):
         Level(first, last, t["liq_level"], LIQ, "swept liquidity P'", ":"),
         Level(first, last, t["stop"], LOSS, "stop", "--"),
     ]
+    leg_top, leg_low = t.get("feat_leg_top"), t.get("feat_leg_low")
+    if leg_top is not None and leg_low is not None:  # leg projection (side space for shorts)
+        d = 1 if long else -1
+        for lvl, name in ((0, "leg start (0)"), (1, "leg level -1")):
+            price = d * (leg_top + lvl * (leg_top - leg_low))
+            levels.append(Level(first, last, price, "#1D9E75", name, ":"))
     markers = [Marker(e, t["entry_signal"], "entry (close)", INK, ">")]
     if trig is not None:
         levels.append(
