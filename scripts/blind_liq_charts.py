@@ -22,12 +22,15 @@ from lsdtrader.viz.chart import INK, Box, ChartSpec, Level, Marker, berlin_label
 
 # (lower, upper, how many) in ATR
 BINS = [(0, 1, 3), (1, 1.5, 3), (1.5, 2, 3), (2, 2.5, 3), (2.5, 3, 2), (3, 4, 2), (4, 99, 2)]
+# --dense: more cases around the boundary Xaver drew (about 2 ATR)
+DENSE = [(0, 1, 3), (1, 1.5, 4), (1.5, 2, 6), (2, 2.5, 6), (2.5, 3, 6), (3, 4, 5), (4, 99, 4)]
 MARGIN = 10
 MAX_BARS = 600
 
 ap = argparse.ArgumentParser()
 ap.add_argument("run", type=Path)
 ap.add_argument("--seed", type=int, default=7)
+ap.add_argument("--dense", action="store_true")
 args = ap.parse_args()
 
 run = load_run(args.run)
@@ -40,8 +43,9 @@ for t in sorted(run.trades, key=lambda t: t["entry_ts"]):
 
 rng = random.Random(args.seed)
 picked = []
-for lo, hi, n in BINS:
+for lo, hi, n in DENSE if args.dense else BINS:
     pool = [t for t in trades if lo <= t["feat_liq_dist_atr"] < hi]
+    print(f"{lo}-{hi} ATR: {len(pool)} available, {min(n, len(pool))} drawn")
     picked += rng.sample(pool, min(n, len(pool)))
 rng.shuffle(picked)
 

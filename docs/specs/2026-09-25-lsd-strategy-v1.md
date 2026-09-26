@@ -118,6 +118,8 @@ Destruction is checked **before** the tap on every bar, so a bar that closes ins
 
 Research variant `zoneKill = closeBeyond` (not default): destroyed only on `close < bot`.
 
+**Age limit** (amendment 2026-09-26, `zone_max_age_days`, Xaver: **5**, default off): a sweep starts no setup for a zone whose origin bar lies more than 5 trading days before the sweep. Trading days are weekdays of CME sessions (a session opening 17:00 CT belongs to the next day; holidays count), so the weekend does not age a zone. Event `zone_too_old`. Caution: the limit was read off the NQ 2025/26 hit rates by zone age (zones older than 5 days reached targets less often), so it is in-sample; Xaver keeps it because zone age matters to him live. The test is 2010-2024.
+
 ### 5.5 Additional zones between P and BOS
 
 Setting `extraZones`:

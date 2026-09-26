@@ -19,6 +19,9 @@ class StrategyConfig:
     # wick_beyond: any trade below the zone (a close below included). In the 1-minute entry
     # modes the wick part (close_inside, wick_beyond) is checked on every minute.
     zone_kill: Literal["close_inside", "close_beyond", "wick_beyond"] = "close_inside"
+    # a sweep starts no setup for a zone more than this many trading days (Mon-Fri, sessions
+    # from 17:00 CT) older than its origin bar; None: no limit
+    zone_max_age_days: int | None = None
     liq_max_dist_atr: float | None = None
     # any: every unswept swing low above a left zone is liquidity for it; nearest: only the one
     # closest to the zone (no other open swing low formed after the zone origin in between)
@@ -77,6 +80,8 @@ class StrategyConfig:
             raise ValueError("zone_lookback must be >= 1")
         if self.atr_len < 1:
             raise ValueError("atr_len must be >= 1")
+        if self.zone_max_age_days is not None and self.zone_max_age_days < 0:
+            raise ValueError("zone_max_age_days must be >= 0 or None")
         if self.liq_min_leg_atr is not None and self.liq_min_leg_atr <= 0:
             raise ValueError("liq_min_leg_atr must be > 0 or None")
         if self.liq_max_dist_atr is not None and self.liq_max_dist_atr <= 0:

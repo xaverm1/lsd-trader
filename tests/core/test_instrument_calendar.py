@@ -66,3 +66,19 @@ def test_gold_cfd_is_costless_for_research() -> None:
     # Spread left out on purpose while the rules are developed; gross R == net R.
     xau = get_instrument("XAUUSD")
     assert xau.spread_ticks == 0 and xau.slippage_ticks == 0 and xau.commission_per_side == 0.0
+
+
+def test_trading_days_between_counts_weekdays_of_cme_sessions() -> None:
+    from datetime import UTC, datetime
+
+    from lsdtrader.core.calendar import trading_days_between
+
+    fri = datetime(2026, 7, 17, 14, 0, tzinfo=UTC)  # Friday 09:00 CT
+    assert trading_days_between(fri, fri) == 0
+    # Sunday 17:00 CT reopen belongs to Monday's session: one trading day after Friday
+    assert trading_days_between(fri, datetime(2026, 7, 19, 22, 30, tzinfo=UTC)) == 1
+    assert trading_days_between(fri, datetime(2026, 7, 20, 14, 0, tzinfo=UTC)) == 1
+    # Thursday 17:30 CT is Friday's session
+    thu_eve = datetime(2026, 7, 16, 22, 30, tzinfo=UTC)
+    assert trading_days_between(thu_eve, fri) == 0
+    assert trading_days_between(fri, datetime(2026, 7, 24, 14, 0, tzinfo=UTC)) == 5

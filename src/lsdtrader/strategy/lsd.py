@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Literal
 
 from lsdtrader.core.bar import TickBar
+from lsdtrader.core.calendar import trading_days_between
 from lsdtrader.core.config import StrategyConfig
 from lsdtrader.core.events import Event, EventLog
 from lsdtrader.strategy.atr import Atr
@@ -18,7 +19,7 @@ from lsdtrader.strategy.liquidity import LiquidityBook, match_zones
 from lsdtrader.strategy.setups import Entry, SetupTracker
 from lsdtrader.strategy.structure import StructureTracker, h2_index, strong_level
 from lsdtrader.strategy.swings import confirmed_swing_low
-from lsdtrader.strategy.zones import ZoneBook
+from lsdtrader.strategy.zones import Zone, ZoneBook
 
 Side = Literal["long", "short"]
 TREND_PIVOTS = (1, 2, 5, 10, 20)  # swing size of the structure-trend candidates
@@ -137,7 +138,7 @@ class SideEngine:
             zones, reason = match_zones(liq, self.zones.live(), atr, self.cfg, before)
             if reason is not None:
                 self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
-            for z in zones:
+            for z in self._young(zones, bar.ts):
                 self.setups.start(z, liq, i, atr)
         trend = {n: t.update(self.bars) for n, t in self.trends.items()}
         self._trend_state = trend
@@ -151,6 +152,19 @@ class SideEngine:
         running = {s.zone.zone_id for s in self.setups.pending}
         self.zones.relocate_touched(self.bars, running)
         return entries
+
+    def _young(self, zones: list[Zone], ts: datetime) -> list[Zone]:
+        """Zones at most zone_max_age_days trading days older than the sweep at `ts`."""
+        k = self.cfg.zone_max_age_days
+        if k is None:
+            return zones
+        young = []
+        for z in zones:
+            if trading_days_between(self.bars[z.o_idx].ts, ts) > k:
+                self.log.emit("zone_too_old", zone_id=z.zone_id)
+            else:
+                young.append(z)
+        return young
 
     def _minutes(self, minutes: Sequence[TickBar]) -> list[Entry]:
         """sweep_1m_cisd: sweeps, taps and entries inside the coming strategy bar."""
@@ -171,7 +185,7 @@ class SideEngine:
                 )
                 if reason is not None:
                     self.log.emit("sweep_no_setup", liq_idx=liq.idx, reason=reason)
-                for z in zones:
+                for z in self._young(zones, m.ts):
                     self.setups.start(z, liq, i, self._last_atr, m.ts)
             score = self._volume_score(m.volume)
             self.leg.update(m)

@@ -41,6 +41,7 @@ def test_config_defaults_match_spec() -> None:
         {"bos_max_bars": 0},
         {"liq_max_dist_atr": 0},
         {"liq_min_leg_atr": 0},
+        {"zone_max_age_days": -1},
         {"max_trades_per_zone": 0},
     ],
 )

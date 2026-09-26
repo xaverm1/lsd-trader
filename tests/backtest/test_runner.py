@@ -288,3 +288,15 @@ def test_liquidity_needs_a_leg_of_at_least_k_atr() -> None:
     )
     assert [t for t in small.trades if t.side == "long"] == []
     assert any(e.kind == "liq_small_leg" and e.side == "long" for e in small.events)
+
+
+def test_zone_older_than_k_trading_days_starts_no_setup() -> None:
+    # FULL_LONG: zone origin bar 6, sweep bar 15. Bars from 10 on are moved a week later
+    # (Tuesday -> next Tuesday): the zone is 5 trading days old at the sweep.
+    later = [replace(b, ts=b.ts + timedelta(days=7)) for b in FULL_LONG[10:] + TO_TARGET]
+    bars = FULL_LONG[:10] + later
+    ok = run_backtest(INST, bars, cfg=StrategyConfig(zone_max_age_days=5))
+    assert [t.exit_reason for t in ok.trades if t.side == "long"] == ["tp"]
+    old = run_backtest(INST, bars, cfg=StrategyConfig(zone_max_age_days=4))
+    assert [t for t in old.trades if t.side == "long"] == []
+    assert any(e.kind == "zone_too_old" and e.side == "long" for e in old.events)
