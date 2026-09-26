@@ -141,6 +141,18 @@ behalten nur einen Trade pro Minute und Seite (live wäre das eine Position).
 | Variante 2 + Leg-Ziel + `--flat-only`, NQ 2026 | Ziel -2: 197 Trades, netto +0,06 R; -2,5: +0,13; -4: +0,13 (t ≤ 0,6); keine Übernacht-Trades |
 | Fenster Sweep→Tap, NQ 2026, pivot 2 (alte Liquiditäts- und Zielregel) | 15 min +0,57 R (75 T), 60 min +0,39 (114), 2 h +0,34 (139), 4 h +0,17 (158), 24 h +0,13 (194). Median Sweep→Tap 43 min. Tap > 1 h nach dem Sweep: negativ. |
 
+**Fixes 26.09.2026 (verändern alle früheren Zahlen):**
+- Rollwechsel: Die Databento-Reihe sprang bei jedem Kontraktwechsel (NQ 210-320 Punkte, ~7-10
+  Stops); Zonen und Liquidität von vor dem Roll lagen falsch, ein Trade über den Roll kostete
+  -60 R. Jetzt rechnet `load_minute_files` die ältere Historie am Roll zurück (Lücke = erstes
+  Open des neuen minus letztes Close des alten Kontrakts; wie TradingView „Back-adjustment“).
+  Für den Chart-Abgleich in TradingView die Rückanpassung einschalten.
+- Einstieg in der ersten Minute einer 30-min-Kerze: Stop/Ziel wurden für den Rest dieser Kerze
+  nicht geprüft (Beispiel 04.11.2025: -4,1 R statt -1 R). Neues Feld `Signal.intrabar`.
+- NQ 2025 läuft im Befehl mit und ist für die neuen Regeln out-of-sample (nicht zum Regelbau
+  benutzt). Feste RR (`tp_mode=rr`), NQ 2025+2026 nach beiden Fixes, 436 Trades: netto 2R
+  -0,05, 3R -0,12, 4R -0,08, 6R -0,13 R/Trade (alle t > -1,6).
+
 **Wichtig:** Alle Regeln der letzten Runde sind entstanden, während Xaver Trades aus 2026
 angeschaut hat. 2026 ist damit in-sample, die guten Zahlen dort beweisen nichts (dazu kleine
 N und sieben getestete Fenster). Der ehrliche Test sind 2010-2025, die in die Regeln nicht

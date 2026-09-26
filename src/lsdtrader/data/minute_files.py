@@ -6,6 +6,8 @@ HistData:  zip containing DAT_ASCII_<SYMBOL>_M1_<YEAR>.csv, rows `YYYYMMDD HHMMS
 Dukascopy: CSV with header `Etc/UTC,Open,High,Low,Close,Volume`, ISO timestamps in UTC.
 Databento: `<ROOT>_ohlcv1m_<YEAR>.csv.gz` (scripts/databento_download.py), header
            `ts_event,open,high,low,close,volume,instrument_id`, UTC, with real futures volume.
+           The continuous front contract jumps at every roll (NQ ~1 %); `load_minute_files`
+           back-adjusts it (see `back_adjust`).
 Both return 1-minute TickBars in UTC. `load_minute_files` merges files, sorts, and drops
 repeated timestamps, returning how many it dropped so the data report can show it.
 """
@@ -111,36 +113,74 @@ def databento_symbol(path: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def read_databento_csv(path: Path, inst: Instrument) -> list[TickBar]:
+def read_databento_rows(path: Path, inst: Instrument) -> list[tuple[TickBar, str]]:
+    """1-minute bars with the contract (`instrument_id`) each one comes from."""
     with gzip.open(path, "rt", encoding="utf-8", newline="") as fh:
         rows = csv.reader(fh)
         header = next(rows)
         if header[:6] != ["ts_event", "open", "high", "low", "close", "volume"]:
             raise ValueError(f"{path.name}: unexpected Databento header {header}")
         return [
-            TickBar(
-                datetime.fromisoformat(ts).astimezone(UTC),
-                inst.to_ticks(o),
-                inst.to_ticks(h),
-                inst.to_ticks(lo),
-                inst.to_ticks(c),
-                float(v),
+            (
+                TickBar(
+                    datetime.fromisoformat(ts).astimezone(UTC),
+                    inst.to_ticks(o),
+                    inst.to_ticks(h),
+                    inst.to_ticks(lo),
+                    inst.to_ticks(c),
+                    float(v),
+                ),
+                rest[0] if rest else "",
             )
-            for ts, o, h, lo, c, v, *_ in rows
+            for ts, o, h, lo, c, v, *rest in rows
         ]
+
+
+def read_databento_csv(path: Path, inst: Instrument) -> list[TickBar]:
+    return [bar for bar, _ in read_databento_rows(path, inst)]
+
+
+def back_adjust(rows: Sequence[tuple[TickBar, str]]) -> list[TickBar]:
+    """Remove the roll jumps of a continuous futures series (time-sorted, one contract id per
+    bar). At each contract change the gap = first open of the new contract - last close of
+    the old one is added to every earlier bar, so the newest prices stay real (TradingView
+    back-adjustment). Only the front contract is in the data, so the gap includes that one
+    minute's price change."""
+    out: list[TickBar] = []
+    offset = 0
+    for i in range(len(rows) - 1, -1, -1):
+        bar, contract = rows[i]
+        if i + 1 < len(rows) and contract != rows[i + 1][1]:
+            offset += rows[i + 1][0].open - bar.close
+        if offset:
+            bar = TickBar(
+                bar.ts,
+                bar.open + offset,
+                bar.high + offset,
+                bar.low + offset,
+                bar.close + offset,
+                bar.volume,
+            )
+        out.append(bar)
+    out.reverse()
+    return out
 
 
 def load_minute_files(paths: Sequence[Path], inst: Instrument) -> tuple[list[TickBar], int]:
     """Merged 1-minute bars and the number of duplicate timestamps dropped."""
     chunks: list[list[TickBar]] = []
+    futures: list[tuple[TickBar, str]] = []
     for p in paths:
         if databento_symbol(p):
-            chunks.append(read_databento_csv(p, inst))
+            futures += read_databento_rows(p, inst)
         elif p.suffix.lower() == ".zip":
             chunks.append(read_histdata_zip(p, inst))
         elif p.suffix.lower() == ".csv":
             chunks.append(read_dukascopy_csv(p, inst))
         else:
             raise ValueError(f"{p.name}: unsupported minute file (expected .zip or .csv)")
+    if futures:
+        futures.sort(key=lambda row: row[0].ts)
+        chunks.append(back_adjust(futures))
     merged = merge(chunks)
     return merged, sum(len(c) for c in chunks) - len(merged)

@@ -46,6 +46,9 @@ class Signal:
     sweep_idx: int
     tap_idx: int
     features: dict[str, object] = field(default_factory=dict)
+    # Entered on a 1-minute bar inside the strategy bar (not at the bar close); may fall on
+    # the bar's opening minute, so `ts == bar.ts` does not tell the two apart.
+    intrabar: bool = False
 
 
 def unmirror_detail(detail: dict[str, object]) -> dict[str, object]:
@@ -250,4 +253,5 @@ class LsdStrategy:
             e.sweep_idx,
             e.tap_idx,
             dict(e.features),
+            intrabar=e.ts is not None,
         )

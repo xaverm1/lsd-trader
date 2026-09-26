@@ -129,3 +129,39 @@ def test_databento_csv_gz(tmp_path: Path) -> None:
         12962,
         1234.0,
     )
+
+
+def test_databento_rolls_are_back_adjusted_across_files(tmp_path: Path) -> None:
+    # Continuous front contract: at each contract change the older history is shifted by the
+    # gap (new contract's first open - old contract's last close), so the newest prices stay
+    # real and no roll jump remains (TradingView back-adjustment). Works across year files.
+    import gzip
+
+    def write(name: str, rows: list[str]) -> Path:
+        path = tmp_path / name
+        with gzip.open(path, "wt", encoding="utf-8") as fh:
+            fh.write("ts_event,open,high,low,close,volume,instrument_id\n")
+            fh.writelines(r + "\n" for r in rows)
+        return path
+
+    a = write(
+        "ES_ohlcv1m_2020.csv.gz",
+        [
+            "2020-12-31 23:58:00+00:00,100.0,101.0,99.0,100.0,1,1",
+            "2020-12-31 23:59:00+00:00,100.0,100.5,99.5,100.0,1,1",
+        ],
+    )
+    b = write(
+        "ES_ohlcv1m_2021.csv.gz",
+        [
+            "2021-01-01 00:00:00+00:00,110.0,111.0,109.0,110.5,1,2",  # roll: +10 points
+            "2021-01-01 00:01:00+00:00,110.5,112.0,110.0,111.0,1,2",
+            "2021-01-01 00:02:00+00:00,111.0,112.0,110.0,111.0,1,3",  # roll: +0 points
+        ],
+    )
+    inst = get_instrument("ES")
+    bars, dropped = load_minute_files([b, a], inst)
+    assert dropped == 0
+    closes = [inst.to_price(x.close) for x in bars]
+    assert closes == [110, 110, 110.5, 111, 111]
+    assert inst.to_price(bars[0].high) == 111 and inst.to_price(bars[0].low) == 109

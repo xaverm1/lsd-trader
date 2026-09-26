@@ -73,7 +73,7 @@ def run_backtest(
             (shadow, [_without_target(s) for s in new], free),
         ):
             for pos in b.submit(sigs, bar, brk):
-                if pos.signal.ts != bar.ts:  # opened inside the bar (reclaim entry)
+                if pos.signal.intrabar:  # opened on a minute inside the bar
                     trade = b.resolve_rest_of_bar(pos, exit_minutes)
                     if trade is not None:
                         out.append(trade)

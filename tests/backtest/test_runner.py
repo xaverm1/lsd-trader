@@ -232,3 +232,40 @@ def test_absorption_leg_target() -> None:
     rr = replace(cfg, tp_mode="rr")
     (tr,) = run_backtest(INST, FULL_LONG[:15] + [bar], {bar.ts: mins}, rr).trades
     assert tr.target == 113 + 4 * 6
+
+
+def test_minute_entry_on_the_first_minute_of_a_bar_is_managed_in_that_bar(monkeypatch) -> None:
+    # A 1-minute entry can fall on the bar's opening minute (signal ts == bar ts). Stop and
+    # target must still be checked on the bar's later minutes, not only from the next bar.
+    import lsdtrader.backtest.runner as runner
+    from lsdtrader.strategy.lsd import Signal
+
+    bars = make_bars((110, 112, 100, 101), (101, 102, 100, 101))
+    t = bars[0].ts
+    mins = [
+        TickBar(t, 110, 111, 109, 110),  # entry at the close of the bar's first minute
+        TickBar(t + timedelta(minutes=1), 110, 112, 105, 106),  # stop 108 hit here
+        TickBar(t + timedelta(minutes=2), 106, 106, 100, 101),
+    ]
+
+    class OneShot:
+        def __init__(self, cfg: StrategyConfig) -> None:
+            self.done = False
+
+        def on_bar(self, bar: TickBar, minutes: object) -> list[Signal]:
+            if self.done:
+                return []
+            self.done = True
+            return [
+                Signal(
+                    "long", 0, t, 110, 108, 118, "s", "z", 109, 105, 0, 0, 0, 0, 0, intrabar=True
+                )
+            ]
+
+        def drain_events(self) -> list[object]:
+            return []
+
+    monkeypatch.setattr(runner, "LsdStrategy", OneShot)
+    result = run_backtest(INST, bars, {bars[0].ts: mins})
+    (tr,) = result.trades
+    assert (tr.exit_reason, tr.exit_raw, tr.exit_ts) == ("sl", 108, mins[1].ts)
