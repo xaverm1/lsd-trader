@@ -16,7 +16,7 @@ from lsdtrader.core.events import Event, EventLog
 from lsdtrader.strategy.atr import Atr
 from lsdtrader.strategy.context import LegTracker, LevelBook, TrendTracker, hh_hl
 from lsdtrader.strategy.liquidity import LiquidityBook, match_zones
-from lsdtrader.strategy.setups import Entry, SetupTracker
+from lsdtrader.strategy.setups import MINUTE_MODES, Entry, SetupTracker
 from lsdtrader.strategy.structure import StructureTracker, h2_index, strong_level
 from lsdtrader.strategy.swings import Swing, confirmed_swing_low
 from lsdtrader.strategy.zones import Zone, ZoneBook
@@ -97,7 +97,7 @@ class SideEngine:
     def on_bar(self, bar: TickBar, minutes: Sequence[TickBar] | None = None) -> list[Entry]:
         """`minutes` (this bar's 1-minute bars, same side) feed reclaim entries."""
         early: list[Entry] = []
-        by_minute = self.cfg.entry_mode in ("sweep_1m_cisd", "absorption_1m") and bool(minutes)
+        by_minute = self.cfg.entry_mode in MINUTE_MODES and bool(minutes)
         if self.cfg.entry_mode == "reclaim_1m" and minutes:
             early = self.setups.minute_entries(self.bars, minutes)
         elif by_minute:
@@ -237,7 +237,7 @@ class SideEngine:
             if self.cfg.entry_mode == "absorption_1m":
                 entries += self.setups.on_minute_absorption(self.bars, m, score, self.leg)
             else:
-                entries += self.setups.on_minute(self.bars, m, self._run_open)
+                entries += self.setups.on_minute(self.bars, m, self._run_open, self.leg)
         return entries
 
     def _volume_score(self, v: float) -> float:

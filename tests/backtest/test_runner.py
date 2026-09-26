@@ -300,3 +300,23 @@ def test_zone_older_than_k_trading_days_starts_no_setup() -> None:
     old = run_backtest(INST, bars, cfg=StrategyConfig(zone_max_age_days=4))
     assert [t for t in old.trades if t.side == "long"] == []
     assert any(e.kind == "zone_too_old" and e.side == "long" for e in old.events)
+
+
+def test_reclaim_of_the_liquidity_entry_on_minutes() -> None:
+    # the CISD scenario: minute 3 closes back above P' 113 (114) -> reclaim entry there
+    t = FULL_LONG[15].ts
+    mins = [
+        TickBar(t, 115, 117, 114, 116),
+        TickBar(t + timedelta(minutes=1), 116, 116, 112, 112),  # sweep of 113
+        TickBar(t + timedelta(minutes=2), 112, 112, 110, 110),  # tap of 111, low 110
+        TickBar(t + timedelta(minutes=3), 110, 114, 110, 114),  # close above P' -> entry
+        TickBar(t + timedelta(minutes=4), 114, 117, 113, 117),
+    ]
+    bar = TickBar(t, 115, 117, 110, 117)
+    cfg = StrategyConfig(entry_mode="reclaim_liq_1m")
+    (tr,) = [
+        x
+        for x in run_backtest(INST, FULL_LONG[:15] + [bar], {t: mins}, cfg).trades
+        if x.side == "long"
+    ]
+    assert (tr.entry_signal, tr.stop, tr.entry_ts) == (114, 110, mins[3].ts)

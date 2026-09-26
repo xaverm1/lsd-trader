@@ -14,6 +14,8 @@ from lsdtrader.strategy.context import LegTracker
 from lsdtrader.strategy.liquidity import Liquidity
 from lsdtrader.strategy.zones import Zone, ZoneBook
 
+MINUTE_MODES = ("sweep_1m_cisd", "absorption_1m", "reclaim_liq_1m")
+
 
 @dataclass(slots=True)
 class Setup:
@@ -113,7 +115,7 @@ class SetupTracker:
         if z.state != "left":
             self._log.emit("setup_zone_gone", setup_id=s.setup_id, zone_state=z.state)
             return False
-        if cfg.entry_mode in ("sweep_1m_cisd", "absorption_1m"):  # tap and entry: on_minute
+        if cfg.entry_mode in MINUTE_MODES:  # tap and entry: on_minute
             if s.tap_idx is None and i - s.sweep_idx >= cfg.max_bars_sweep_to_tap:
                 self._log.emit("no_tap", setup_id=s.setup_id)
                 return False
@@ -216,14 +218,23 @@ class SetupTracker:
         self._pending = keep
         return entries
 
-    def on_minute(self, bars: Sequence[TickBar], m: TickBar, run_open: int | None) -> list[Entry]:
-        """sweep_1m_cisd: advance setups by one minute of the strategy bar that will get index
-        len(bars). `run_open` is the open of the latest run of bearish minutes (incl. `m`).
+    def on_minute(
+        self,
+        bars: Sequence[TickBar],
+        m: TickBar,
+        run_open: int | None,
+        leg: LegTracker | None = None,
+    ) -> list[Entry]:
+        """sweep_1m_cisd / reclaim_liq_1m: advance setups by one minute of the strategy bar that
+        will get index len(bars). `run_open` is the open of the latest run of bearish minutes
+        (incl. `m`).
 
         CISD (change in state of delivery, bullish): a close above the open of the run of
         consecutive bearish candles that made the low. Entry on the first minute after the
-        tap (the tapping minute included) that closes above both P' and that level.
+        tap (the tapping minute included) that closes above P' and (sweep_1m_cisd only) that
+        level. tp_mode="leg": the leg as it stands at the entry minute.
         """
+        cisd_mode = self._cfg.entry_mode == "sweep_1m_cisd"
         i = len(bars)
         entries: list[Entry] = []
         keep: list[Setup] = []
@@ -238,10 +249,20 @@ class SetupTracker:
                 if s.tap_idx is None and m.low <= z.top + self._cfg.tap_tol_ticks:
                     s.tap_idx, s.tap_ts = i, m.ts
                     self._log.emit("tap", setup_id=s.setup_id)
-                level = max(s.liq.price, s.cisd if s.cisd is not None else s.liq.price)
+                cisd = s.cisd if cisd_mode and s.cisd is not None else s.liq.price
+                level = max(s.liq.price, cisd)
                 if s.tap_idx is not None and m.close > level:
-                    entry = self._enter(bars, s, i, m.close, s.low, m.ts)
+                    top, low = (leg.top, leg.low) if leg is not None else (None, None)
+                    if top is not None and low is not None and top > low:
+                        s.leg_top, s.leg_low = top, low
+                    target = self._leg_target(s, m.close)
+                    if target is not None and target <= m.close:
+                        self._log.emit("leg_target_not_beyond_entry", setup_id=s.setup_id)
+                        continue
+                    entry = self._enter(bars, s, i, m.close, s.low, m.ts, target)
                     entry.features["cisd_level"] = s.cisd  # side space: negated for shorts
+                    entry.features["leg_top"] = s.leg_top
+                    entry.features["leg_low"] = s.leg_low
                     entries.append(entry)
                     continue
             keep.append(s)

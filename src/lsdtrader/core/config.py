@@ -63,7 +63,11 @@ class StrategyConfig:
     # score >= absorb_min and a long lower wick, as the TradingView "Absorption Bubbles") arms
     # the setup; entry on the first later minute closing above that minute's high, within
     # absorb_wait_min minutes. A lower low disarms; a new absorption minute re-arms.
-    entry_mode: Literal["bar", "reclaim_1m", "sweep_1m_cisd", "absorption_1m"] = "bar"
+    # "reclaim_liq_1m": like sweep_1m_cisd without the CISD level: entry on the first minute
+    # from the tap on that closes back above the swept liquidity.
+    entry_mode: Literal["bar", "reclaim_1m", "sweep_1m_cisd", "absorption_1m", "reclaim_liq_1m"] = (
+        "bar"
+    )
     absorb_min: float = 1.3  # volume / stdev(volume, absorb_len), population stdev
     absorb_len: int = 100
     absorb_wait_min: int = 15

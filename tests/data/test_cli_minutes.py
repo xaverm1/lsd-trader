@@ -105,3 +105,12 @@ def test_backtest_flat_only_keeps_the_flat_and_opens_entries_until_it(tmp_path: 
     cfg = json.loads(meta.read_text())["execution_config"]
     assert cfg["flat_before_break"] is True
     assert [str(x)[:5] for x in cfg["session_window"]] == ["17:00", "15:10"]
+
+
+def test_backtest_entries_from_new_york_time(tmp_path: Path) -> None:
+    z = histdata_zip(tmp_path / "a.zip", 120)
+    args = ["backtest", str(z), "--timeframe", "30", "--entries-ny-from", "09:30"]
+    assert main([*args, "--out", str(tmp_path / "r")]) == 0
+    (meta,) = (tmp_path / "r").glob("*/meta.json")
+    cfg = json.loads(meta.read_text())["execution_config"]
+    assert [str(x)[:5] for x in cfg["session_window"]] == ["08:30", "15:10"]  # Chicago time

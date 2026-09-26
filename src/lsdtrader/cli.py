@@ -58,6 +58,11 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     exec_cfg = ExecutionConfig(sizing=args.sizing, risk_usd=args.risk, bar_minutes=args.timeframe)
     if args.hold_overnight:
         exec_cfg = dataclasses.replace(exec_cfg, flat_before_break=False, session_window=None)
+    if args.entries_ny_from and not args.hold_overnight:
+        # New York is always one hour ahead of Chicago (both follow US daylight saving)
+        hh, mm = (int(x) for x in args.entries_ny_from.split(":"))
+        start = time((hh - 1) % 24, mm)
+        exec_cfg = dataclasses.replace(exec_cfg, session_window=(start, exec_cfg.flat_time))
     elif args.flat_only:
         # entries all session long; only from the flat time to the reopen none (they would run
         # overnight until the next day's flat)
@@ -150,6 +155,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--hold-overnight",
         action="store_true",
         help="no forced close at the flat time and no entry window (positions run on)",
+    )
+    bt.add_argument(
+        "--entries-ny-from",
+        metavar="HH:MM",
+        help="new entries only from this New York time up to the flat time (15:10 CT), "
+        "e.g. 08:30 or 09:30",
     )
     bt.add_argument(
         "--flat-only",
